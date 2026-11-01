@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] `cu_observe` with `action: "snapshot"` defaults to `-i --compact --include-bounds --skeleton` when no `root` **Ref** or `maxDepth` is provided, and respects explicit overrides for `interactiveOnly`, `compact`, `includeBounds`, `skeleton`, `maxDepth`, `root`, and `surface`.
-- [ ] When `surface` and `root` are omitted on `snapshot`, `cu_observe` detects any open **Overlay Surface** (`sheet`, `alert`, `menu`, `popover`) in the initial Window tree and automatically snapshots that Overlay Surface, reporting the active surface in the returned metadata.
-- [ ] When `windowId` is specified alongside `root` or an auto-detected **Overlay Surface**, `cu_observe` verifies window containment and fails with a clear `root_outside_window` or `surface_outside_window` error if the target belongs to a different Window.
-- [ ] `cu_observe` supports `find` (by role, name/text, or state), `get` (property read on a **Ref**), `is` (state predicate check on a **Ref**), and `list-surfaces` for an application Window.
-- [ ] End-to-end tool-seam tests verify default skeleton snapshots, explicit **Region** (`root`) snapshots, automatic **Overlay Surface** switching, cross-window containment rejection, and `find`/`get`/`is`/`list-surfaces` queries.
+- [x] `cu_observe` with `action: "snapshot"` defaults to `-i --compact --include-bounds --skeleton` when no `root` **Ref** or `maxDepth` is provided, and respects explicit overrides for `interactiveOnly`, `compact`, `includeBounds`, `skeleton`, `maxDepth`, `root`, and `surface`.
+- [x] When `surface` and `root` are omitted on `snapshot`, `cu_observe` detects any open **Overlay Surface** (`sheet`, `alert`, `menu`, `popover`) in the initial Window tree and automatically snapshots that Overlay Surface, reporting the active surface in the returned metadata.
+- [x] When `windowId` is specified alongside `root` or an auto-detected **Overlay Surface**, `cu_observe` verifies window containment and fails with a clear `root_outside_window` or `surface_outside_window` error if the target belongs to a different Window.
+- [x] `cu_observe` supports `find` (by role, name/text, or state), `get` (property read on a **Ref**), `is` (state predicate check on a **Ref**), and `list-surfaces` for an application Window.
+- [x] End-to-end tool-seam tests verify default skeleton snapshots, explicit **Region** (`root`) snapshots, automatic **Overlay Surface** switching, cross-window containment rejection, and `find`/`get`/`is`/`list-surfaces` queries.
