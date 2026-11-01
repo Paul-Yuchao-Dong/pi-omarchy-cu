@@ -668,13 +668,37 @@ test("cu_act snapshots an open Overlay Surface instead of the Window behind it",
   );
   const details = result.details as any;
 
+  // agent-desktop forbids `--skeleton` on a surface, so the surface read is `-i` alone.
   assert.deepEqual(runner.argLists("snapshot"), [
     ["snapshot", "--app", "Notes", "-i", "--compact", "--include-bounds", "--skeleton"],
-    ["snapshot", "--app", "Notes", "-i", "--compact", "--include-bounds", "--skeleton", "--surface", "sheet"],
+    ["snapshot", "--app", "Notes", "-i", "--surface", "sheet"],
   ]);
   assert.equal(details.surface, "sheet");
   assert.equal(details.target.ref, "@s2:e1");
   assert.ok(details.notes.some((note: string) => /Overlay Surface/.test(note)));
+});
+
+test("cu_act reads an explicitly pinned Overlay Surface without skeleton or bounds flags", async () => {
+  const sheetTree: AdNode = {
+    role: "sheet",
+    name: "Allow access?",
+    children: [{ role: "button", name: "Allow", ref_id: "@s2:e1", available_actions: ["Click"] }],
+  };
+  const runner = new FakeCliRunner((args) => snapshotEnvelope(sheetTree, { surfaces: [{ kind: "sheet" }] }));
+  const decisionClient = new FakeDecisionClient(() =>
+    actDecision({ target: "@s2:e1", targetConfidence: 0.93, command: "click", offered: ["@s2:e1", "none"] }),
+  );
+  const deps = makeDeps({ cli: runner, decision: decisionClient });
+
+  await actTool(deps).execute(
+    "call-1",
+    { intent: "press Allow", app: "Notes", surface: "sheet" },
+    undefined,
+    undefined,
+    makeContext(),
+  );
+
+  assert.deepEqual(runner.argLists("snapshot"), [["snapshot", "--app", "Notes", "-i", "--surface", "sheet"]]);
 });
 
 test("cu_act forwards the AbortSignal to the runner and the decision client", async () => {
