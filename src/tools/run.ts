@@ -30,6 +30,7 @@ import {
   type RunTurn,
 } from "../decide/loop.js";
 import { detectOverlay, screenFingerprint, snapshotWindowId } from "../desktop/tree.js";
+import { isAbortError } from "../jev/abort.js";
 import { mapRunToAct } from "../policy/operations.js";
 import { confirmationMessage, confirmationTitle } from "../policy/route.js";
 import { redactDeep, type TextSupply } from "../text/queue.js";
@@ -324,7 +325,7 @@ export function createRunTool(deps: CuDeps): CuTool {
           },
         );
       } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") throw error;
+        if (isAbortError(error, requestSignal)) throw error;
         const message = error instanceof Error ? error.message : String(error);
         return errorResult("DECISION_FAILED", `Jev System One request failed: ${message}`);
       }

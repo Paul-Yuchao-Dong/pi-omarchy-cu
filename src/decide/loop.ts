@@ -35,6 +35,7 @@ import type {
   AdSnapshotData,
   DecisionRequest,
   DecisionResponse,
+  DeliveryDisposition,
   QuestionSpec,
   RouteDecision,
   RunOperation,
@@ -214,8 +215,9 @@ export interface RunRecentAction {
   target: { ref: string; role: string; name: string } | null;
   /** Caller-supplied string consumed by TYPE_TEXT or SELECT. */
   text?: string;
-  decision: RouteDecision;
-  delivery: string | null;
+  /** `null` for a turn that never reached a Route Decision (DRILL, WIDEN, WAIT, DONE, BLOCKED). */
+  decision: RouteDecision | null;
+  delivery: DeliveryDisposition | null;
   changed: boolean | null;
   confirmedByUser?: boolean;
 }
@@ -420,8 +422,8 @@ export type ObserveOutcome =
   | { ok: false; stop: string; code?: string; message?: string };
 
 export type MutationOutcome =
-  | { ok: true; delivery: string }
-  | { ok: false; delivery: string; code: string; message: string };
+  | { ok: true; delivery: DeliveryDisposition }
+  | { ok: false; delivery: DeliveryDisposition; code: string; message: string };
 
 export interface ConfirmRequest {
   operation: RunOperation;
@@ -457,8 +459,9 @@ export interface RunTurn {
   turn: number;
   operation: RunOperation | null;
   target: { ref: string; role: string; name: string } | null;
-  decision: RouteDecision;
-  delivery: string | null;
+  /** `null` when the turn never reached a Route Decision: only routed, mutating intent steps have one. */
+  decision: RouteDecision | null;
+  delivery: DeliveryDisposition | null;
   changed: boolean | null;
   stop?: string;
   confirmedByUser?: boolean;
@@ -610,7 +613,7 @@ export async function runGoalLoop(
     if (!validation.ok) {
       addNote(validation.problem);
       complete(
-        { operation: null, target: null, decision: "abstain", delivery: null, changed: null },
+        { operation: null, target: null, decision: null, delivery: null, changed: null },
         `abstain: ${validation.problem}`,
       );
       return result(`abstain: ${validation.problem}`);
@@ -620,12 +623,12 @@ export async function runGoalLoop(
     const target = targetPayload(answers.target);
 
     if (operation === "DONE") {
-      complete({ operation, target: null, decision: "act", delivery: null, changed: null }, "done");
+      complete({ operation, target: null, decision: null, delivery: null, changed: null }, "done");
       return result("done");
     }
     if (operation === "BLOCKED") {
       addNote("the decision model reported the Goal as blocked on the current screen");
-      complete({ operation, target: null, decision: "act", delivery: null, changed: null }, "blocked");
+      complete({ operation, target: null, decision: null, delivery: null, changed: null }, "blocked");
       return result("blocked");
     }
 
@@ -637,6 +640,10 @@ export async function runGoalLoop(
         confirmDestructive: input.confirmDestructive === true,
       });
     if (riskWanted) {
+      if (jevCalls >= limits.jevCalls) {
+        addNote("the decision-call budget was spent before the destructive risk rating; stopping");
+        return result("budget: jev calls");
+      }
       const risk = await deps.evaluate(
         {
           state: riskState({
@@ -660,7 +667,9 @@ export async function runGoalLoop(
       }
     }
 
-    let decision: RouteDecision = "act";
+    // Only a routed element Operation has a Route Decision; the view and
+    // terminal Operations below leave it `null`.
+    let decision: RouteDecision | null = null;
     let confirmedByUser = false;
     if (isElementOperation(operation)) {
       const route = decideRoute({

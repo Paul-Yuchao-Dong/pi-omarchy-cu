@@ -16,6 +16,7 @@ import type {
   QuestionSpec,
 } from "../types.js";
 import { resolveJevConfig, type JevConfig, type ResolveJevConfigOptions } from "./config.js";
+import { createAbortError } from "./abort.js";
 
 /** Statuses that are worth retrying, per the spec. */
 const RETRYABLE_STATUS = new Set([429, 503, 529]);
@@ -137,7 +138,7 @@ export class SdkDecisionClient implements DecisionClient {
 
     let attempt = 0;
     for (;;) {
-      if (signal?.aborted) throw abortError();
+      if (signal?.aborted) throw createAbortError();
       try {
         const response: any = await client.systemOne(
           { state: request.state, questions, model },
@@ -164,10 +165,4 @@ export class SdkDecisionClient implements DecisionClient {
       }
     }
   }
-}
-
-function abortError(): Error {
-  const error = new Error("Jev request aborted");
-  error.name = "AbortError";
-  return error;
 }

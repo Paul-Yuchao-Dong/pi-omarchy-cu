@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { AgentDesktopCliRunner, parseEnvelope } from "../src/agent-desktop/runner.js";
 import { createCuTools } from "../src/extension.js";
+import { isAbortError } from "../src/jev/abort.js";
 import { resolveJevConfig, validateEndpoint } from "../src/jev/config.js";
 import {
   ACT_OPERATIONS,
@@ -182,6 +183,23 @@ test("sdk decision client does not retry 400 and honours an aborted signal", asy
     client.evaluate({ state: "x", questions: { target: { type: "noul", instructions: "x" } } }, controller.signal),
     /aborted/i,
   );
+});
+
+test("abort detection covers AbortError, APIUserAbortError, and an aborted signal", () => {
+  assert.equal(isAbortError(Object.assign(new Error("aborted"), { name: "AbortError" })), true);
+  assert.equal(
+    isAbortError(Object.assign(new Error("Request was aborted."), { name: "APIUserAbortError" })),
+    true,
+  );
+  assert.equal(isAbortError(new DOMException("The operation was aborted.", "AbortError")), true);
+  assert.equal(isAbortError(new Error("bad request")), false);
+  assert.equal(isAbortError("boom"), false);
+  assert.equal(isAbortError(undefined), false);
+
+  const controller = new AbortController();
+  assert.equal(isAbortError(new Error("bad request"), controller.signal), false);
+  controller.abort();
+  assert.equal(isAbortError(new Error("socket hang up"), controller.signal), true);
 });
 
 test("route decision enforces the confidence floor, bars, and destructive gate", () => {

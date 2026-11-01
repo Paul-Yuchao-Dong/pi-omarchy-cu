@@ -370,3 +370,18 @@ test("cu_ref rejects a Ref operation without a ref or caller-supplied text", asy
 
   assert.equal(cli.calls.length, 0);
 });
+
+test("cu_ref falls back to the Pi context AbortSignal when the tool signal is absent", async () => {
+  const cli = new FakeCliRunner((args) => okEnvelope(args[0] ?? "unknown", { ref: REF }));
+  const controller = new AbortController();
+
+  await cuRef(cli).execute(
+    "call-1",
+    { action: "click", ref: REF },
+    undefined,
+    undefined,
+    makeContext({ signal: controller.signal }),
+  );
+
+  assert.equal(cli.calls[0]?.options?.signal, controller.signal);
+});

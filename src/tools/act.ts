@@ -24,6 +24,7 @@ import {
   type ActStepResolution,
 } from "../decide/act.js";
 import { detectOverlay, snapshotWindowId } from "../desktop/tree.js";
+import { isAbortError } from "../jev/abort.js";
 import { confirmationMessage, confirmationTitle } from "../policy/route.js";
 import { redactDeep, TextQueue } from "../text/queue.js";
 import { ActParams, type ActInput } from "./schemas.js";
@@ -333,7 +334,7 @@ export function createActTool(deps: CuDeps): CuTool {
           evaluate: (request, callSignal) => deps.decision.evaluate(request, callSignal),
         });
       } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") throw error;
+        if (isAbortError(error, requestSignal)) throw error;
         const message = error instanceof Error ? error.message : String(error);
         return errorResult("DECISION_FAILED", `Jev System One request failed: ${message}`);
       }

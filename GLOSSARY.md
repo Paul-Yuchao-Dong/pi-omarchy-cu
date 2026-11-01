@@ -39,7 +39,7 @@ A canonical interaction or navigation step chosen by the decision model before t
 _Avoid_: Command, verb, action
 
 **Route Decision**:
-The deterministic policy outcome (`act`, `confirm`, `abstain`, or `needs_text`) computed from target confidence and destructive-risk probability against fixed thresholds.
+The deterministic policy outcome (`act`, `confirm`, `abstain`, or `needs_text`) computed from target confidence and destructive-risk probability against fixed thresholds. Only a routed, mutating intent step has one (`cu_act`, and the element Operations of `cu_run`); view and terminal turns (`DRILL`, `WIDEN`, `WAIT`, `DONE`, `BLOCKED`) report none.
 _Avoid_: Verdict, judgment, gate result
 
 **Delivery Disposition**:
