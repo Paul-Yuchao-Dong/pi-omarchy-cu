@@ -295,3 +295,18 @@ test("extension exposes the five cu tools with model-facing metadata", () => {
     assert.ok(tool.parameters);
   }
 });
+
+test("sdk decision client exposes choice probabilities as the answer distribution", async () => {
+  const client = sdkClientWithTransport(async () => ({
+    answers: {
+      target: { type: "choice", choice: "a", confidence: 0.8, probabilities: { a: 0.8, b: 0.2 } },
+    },
+    model: "jev-latest",
+  }));
+  const response = await client.evaluate({
+    state: "x",
+    questions: { target: { type: "choice", instructions: "pick", criteria: { a: null, b: null } } },
+  });
+  assert.equal(response.answers.target.value, "a");
+  assert.deepEqual(response.answers.target.distribution, { a: 0.8, b: 0.2 });
+});

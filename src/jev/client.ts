@@ -114,7 +114,9 @@ export class SdkDecisionClient implements DecisionClient {
         type,
         value,
         confidence: raw?.confidence,
-        distribution: raw?.distribution,
+        // The SDK reports per-label probabilities as `probabilities`; older
+        // transports used `distribution`.
+        distribution: raw?.probabilities ?? raw?.distribution,
         raw,
       };
     }
