@@ -219,7 +219,10 @@ export interface DecisionResponse {
 
 export interface JevConfigSummary {
   configured: boolean;
+  /** SDK API root; `null` when the SDK's TypeSafe default root applies. */
   baseURL: string | null;
+  /** The effective `/v1/systemone` request endpoint. */
+  endpoint: string;
   model: string | null;
   keyOrigin: string | null;
   openrouter: boolean;

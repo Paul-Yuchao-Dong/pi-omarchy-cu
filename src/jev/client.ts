@@ -62,6 +62,7 @@ export class SdkDecisionClient implements DecisionClient {
     return {
       configured: this.config.configured,
       baseURL: this.config.baseURL,
+      endpoint: this.config.endpoint,
       model: this.config.model,
       keyOrigin: this.config.keyOrigin,
       openrouter: this.config.openrouter,
@@ -78,16 +79,16 @@ export class SdkDecisionClient implements DecisionClient {
 
   private client(): { systemOne: (request: any, options?: any) => Promise<any> } {
     if (this.sdkClient) return this.sdkClient;
-    if (this.config.problem || !this.config.baseURL) {
-      throw new Error(this.config.problem ?? "Jev is not configured.");
-    }
+    if (this.config.problem) throw new Error(this.config.problem);
     if (this.options.createClient) {
       this.sdkClient = this.options.createClient(this.config);
       return this.sdkClient;
     }
     this.sdkClient = new TypeSafeClient({
       apiKey: this.config.apiKey ?? "",
-      baseURL: this.config.baseURL,
+      // A `null` root leaves the SDK default (`https://api.typesafe.ai`) in place;
+      // the SDK appends `/v1/systemone` itself.
+      ...(this.config.baseURL === null ? {} : { baseURL: this.config.baseURL }),
       defaultModel: this.config.model,
     }) as unknown as { systemOne: (request: any, options?: any) => Promise<any> };
     return this.sdkClient;

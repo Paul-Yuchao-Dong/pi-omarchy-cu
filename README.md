@@ -72,15 +72,17 @@ another AT-SPI client connected.
 | --- | --- |
 | `AGENT_DESKTOP_BIN` | Explicit `agent-desktop` executable. |
 | `AGENT_DESKTOP_HOME` | State directory; created and enforced at `0700`. |
-| `PI_JEV_BASE_URL`, `TYPESAFE_BASE_URL` | Jev endpoint. HTTPS is required for remote hosts; plain HTTP is allowed only on loopback, and URLs with embedded credentials are rejected. |
+| `PI_JEV_BASE_URL`, `TYPESAFE_BASE_URL` | Jev endpoint, as an API root (`https://api.typesafe.ai`) or the full `.../v1/systemone` endpoint; both resolve to the same request URL. HTTPS is required for remote hosts; plain HTTP is allowed only on loopback, and URLs with embedded credentials are rejected. |
 | `PI_JEV_MODEL`, `TYPESAFE_MODEL`, `TYPESAFE_DEFAULT_MODEL` | Decision model, resolved in that order. |
 | `TYPESAFE_API_KEY`, `OPENROUTER_API_KEY` | API keys. The `pi` secret files `~/.pi/agent/secrets/typesafe_api_key` and `~/.pi/agent/secrets/openrouter_api_key` are read when the variables are unset. |
 
 With an OpenRouter key the endpoint defaults to `https://openrouter.ai/api` and
-bare model names are rewritten to `~typesafe/<name>`; otherwise the endpoint is
-`https://api.typesafe.ai/v1/systemone` with model `jev-latest`. A custom loopback
-endpoint may run without a key. `cu_status` reports which origin resolved and
-never prints the key.
+bare model names are rewritten to `~typesafe/<name>`; otherwise the request
+endpoint is `https://api.typesafe.ai/v1/systemone` with model `jev-latest`. An
+explicit `PI_JEV_BASE_URL` may be a root or a full `.../v1/systemone` endpoint;
+the SDK root is derived so the request path is never doubled. A custom loopback
+endpoint may run without a key. `cu_status` reports the resolved `endpoint` and
+key origin and never prints the key.
 
 ## The Wayland boundary (ADR-0002)
 

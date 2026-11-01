@@ -25,6 +25,7 @@ import {
   FakeCliRunner,
   FakeDecisionClient,
   makeDeps,
+  sdkClientWithFetch,
   sdkClientWithTransport,
 } from "./fakes.js";
 
@@ -36,7 +37,8 @@ test("jev configuration mirrors pi-jev resolution order", () => {
   });
   assert.equal(config.apiKey, "ts-key");
   assert.equal(config.keyOrigin, "$TYPESAFE_API_KEY");
-  assert.equal(config.baseURL, "https://api.typesafe.ai/v1/systemone");
+  assert.equal(config.baseURL, null, "the TypeSafe default root is left to the SDK");
+  assert.equal(config.endpoint, "https://api.typesafe.ai/v1/systemone");
   assert.equal(config.model, "jev-latest");
   assert.equal(config.configured, true);
 
@@ -46,6 +48,7 @@ test("jev configuration mirrors pi-jev resolution order", () => {
     readFile: () => null,
   });
   assert.equal(openrouter.baseURL, "https://openrouter.ai/api");
+  assert.equal(openrouter.endpoint, "https://openrouter.ai/api/v1/systemone");
   assert.equal(openrouter.openrouter, true);
   assert.equal(openrouter.model, "~typesafe/jev-max");
 
@@ -57,7 +60,76 @@ test("jev configuration mirrors pi-jev resolution order", () => {
   });
   assert.equal(secretFile.keyOrigin, "~/.pi/agent/secrets/openrouter_api_key");
   assert.equal(secretFile.baseURL, "https://openrouter.ai/api");
+  assert.equal(secretFile.endpoint, "https://openrouter.ai/api/v1/systemone");
   assert.equal(secretFile.model, "~typesafe/jev-latest");
+});
+
+test("a keyless loopback Jev endpoint is configured while a keyless remote one is not", () => {
+  const loopback = resolveJevConfig({
+    env: { PI_JEV_BASE_URL: "http://127.0.0.1:8080" },
+    homedir: "/home/fake",
+    readFile: () => null,
+  });
+  assert.equal(loopback.apiKey, "");
+  assert.equal(loopback.keyOrigin, null);
+  assert.equal(loopback.configured, true);
+  assert.equal(loopback.problem, null);
+  assert.equal(loopback.baseURL, "http://127.0.0.1:8080");
+  assert.equal(loopback.endpoint, "http://127.0.0.1:8080/v1/systemone");
+
+  const remote = resolveJevConfig({
+    env: { PI_JEV_BASE_URL: "https://jev.example.com" },
+    homedir: "/home/fake",
+    readFile: () => null,
+  });
+  assert.equal(remote.apiKey, null);
+  assert.equal(remote.configured, false);
+  assert.match(String(remote.problem), /API key/);
+});
+
+test("an explicit root and a full System One endpoint resolve to the same request URL", () => {
+  for (const base of ["https://api.typesafe.ai", "https://api.typesafe.ai/v1/systemone"]) {
+    const config = resolveJevConfig({
+      env: { TYPESAFE_API_KEY: "ts-key", TYPESAFE_BASE_URL: base },
+      homedir: "/home/fake",
+      readFile: () => null,
+    });
+    assert.equal(config.baseURL, "https://api.typesafe.ai", `${base} must reach the SDK as a root`);
+    assert.equal(config.endpoint, "https://api.typesafe.ai/v1/systemone");
+  }
+
+  const loopback = resolveJevConfig({
+    env: { PI_JEV_BASE_URL: "http://localhost:9000/v1/systemone" },
+    homedir: "/home/fake",
+    readFile: () => null,
+  });
+  assert.equal(loopback.baseURL, "http://localhost:9000");
+  assert.equal(loopback.endpoint, "http://localhost:9000/v1/systemone");
+});
+
+test("sdk decision client never doubles the System One endpoint", async () => {
+  async function requestUrl(env: NodeJS.ProcessEnv): Promise<string> {
+    const urls: string[] = [];
+    const client = sdkClientWithFetch(async (input) => {
+      urls.push(String(input));
+      return new Response(JSON.stringify({ answers: { present: { noul: 0.9 } }, model: "jev-latest" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }, { env });
+    await client.evaluate({
+      state: "x",
+      questions: { present: { type: "noul", instructions: "is it present" } },
+    });
+    assert.equal(urls.length, 1);
+    return urls[0];
+  }
+
+  assert.equal(await requestUrl({}), "https://api.typesafe.ai/v1/systemone");
+  assert.equal(
+    await requestUrl({ TYPESAFE_BASE_URL: "https://api.typesafe.ai/v1/systemone" }),
+    "https://api.typesafe.ai/v1/systemone",
+  );
 });
 
 test("jev endpoint validation allows https and loopback http only", () => {
