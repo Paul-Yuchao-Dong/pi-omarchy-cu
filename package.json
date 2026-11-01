@@ -1,0 +1,56 @@
+{
+  "name": "pi-omarchy-cu",
+  "version": "0.1.0",
+  "description": "Semantic desktop observation and goal-driven interaction for Linux applications from the Pi coding agent, over AT-SPI, with in-process TypeSafe Jev System One decisions",
+  "type": "module",
+  "main": "extensions/index.ts",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "computer-use",
+    "at-spi",
+    "wayland",
+    "hyprland",
+    "omarchy",
+    "typesafe",
+    "jev"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "files": [
+    "extensions",
+    "src",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test --import tsx test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "smoke": "pi -ne -e ./extensions/index.ts -p --no-session \"list loaded tools\""
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "^0.6.0",
+    "tsx": "^4.19.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@sinclair/typebox": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.4.0",
+    "@sinclair/typebox": "^0.34.28",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  },
+  "license": "MIT"
+}
