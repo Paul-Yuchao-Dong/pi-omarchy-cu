@@ -15,13 +15,13 @@ import type {
   RunOperation,
 } from "../types.js";
 import { buildRefArgs, refDelivery } from "../agent-desktop/ref.js";
+import { targetLabel } from "../decide/shared.js";
 import {
   DEFAULT_MAX_JEV_CALLS,
   DEFAULT_MAX_OPERATIONS,
   DEFAULT_MAX_UNCHANGED_TURNS,
   runGoalLoop,
   runLimits,
-  targetLabel,
   type ConfirmRequest,
   type GoalLoopResult,
   type MutationOutcome,
@@ -35,6 +35,7 @@ import { mapRunToAct } from "../policy/operations.js";
 import { confirmationMessage, confirmationTitle } from "../policy/route.js";
 import { redactDeep, type TextSupply } from "../text/queue.js";
 import { RunParams, type RunInput } from "./schemas.js";
+import { overlaySwitchedNote, overlayUnreadableNote, snapshotArgs } from "./snapshot-args.js";
 import {
   errorResult,
   formatForModel,
@@ -75,35 +76,27 @@ type RunOptions = { signal?: AbortSignal; timeoutMs?: number };
 /* Observation                                                                 */
 /* -------------------------------------------------------------------------- */
 
-function narrowingArgs(params: RunInput): string[] {
-  const args: string[] = [];
-  if (params.app) args.push("--app", params.app);
-  if (params.windowId) args.push("--window-id", params.windowId);
-  return args;
-}
-
-function timeoutArgs(params: RunInput): string[] {
-  return params.timeoutMs === undefined ? [] : ["--timeout-ms", String(params.timeoutMs)];
-}
-
 /**
  * The shallow Window read. A drilled read re-roots at the Region instead of
  * skeletonising, so the Region's withheld children are actually read.
  */
 function windowSnapshotArgs(params: RunInput, root: string | null): string[] {
-  const args = ["snapshot", ...narrowingArgs(params), "-i", "--compact"];
-  if (root) args.push("--root", root);
-  else args.push("--include-bounds", "--skeleton");
-  args.push(...timeoutArgs(params));
-  return args;
+  return snapshotArgs({
+    app: params.app,
+    windowId: params.windowId,
+    root,
+    timeoutMs: params.timeoutMs,
+  });
 }
 
-/**
- * The Overlay Surface read passes `-i` alone: agent-desktop forbids
- * `--skeleton` on a surface and popup trees are already small.
- */
+/** The Overlay Surface read passes `-i` alone: agent-desktop forbids `--skeleton` on a surface. */
 function surfaceSnapshotArgs(params: RunInput, surface: string): string[] {
-  return ["snapshot", ...narrowingArgs(params), "-i", "--surface", surface, ...timeoutArgs(params)];
+  return snapshotArgs({
+    app: params.app,
+    windowId: params.windowId,
+    surface,
+    timeoutMs: params.timeoutMs,
+  });
 }
 
 function runOptions(params: RunInput, signal: AbortSignal | undefined): RunOptions {
@@ -143,12 +136,9 @@ async function observeWindow(
     if (surfaceCall.envelope.ok) {
       data = (surfaceCall.envelope.data ?? {}) as AdSnapshotData;
       surface = overlay.kind;
-      notes.push(`observed the open ${overlay.kind} Overlay Surface instead of the Window behind it`);
+      notes.push(overlaySwitchedNote(overlay.kind));
     } else {
-      notes.push(
-        `the open ${overlay.kind} Overlay Surface could not be read ` +
-          `(${surfaceCall.envelope.error?.code ?? "error"}); observed the Window instead`,
-      );
+      notes.push(overlayUnreadableNote(overlay.kind, surfaceCall.envelope.error?.code ?? "error"));
     }
   }
 

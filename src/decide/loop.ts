@@ -40,7 +40,15 @@ import type {
   RouteDecision,
   RunOperation,
 } from "../types.js";
-import { describeCandidate, TARGET_NONE, type ActWindow } from "./act.js";
+import { describeCandidate, TARGET_NONE } from "./act.js";
+import {
+  nodeIdentity,
+  targetLabel,
+  targetPayload,
+  windowState,
+  type ActWindow,
+  type NodeIdentity,
+} from "./shared.js";
 
 /** Default Operation budget for one Goal. */
 export const DEFAULT_MAX_OPERATIONS = 40;
@@ -101,19 +109,14 @@ export function isElementOperation(operation: RunOperation): boolean {
 /* -------------------------------------------------------------------------- */
 
 /** One offered target: an element Ref or the whole-Window `WIDEN` target. */
-export interface RunTarget {
-  ref: string;
-  role: string;
-  name: string;
+export interface RunTarget extends NodeIdentity {
   description: string;
   node: AdNode;
 }
 
 function toRunTarget(walked: WalkedNode, values?: boolean): RunTarget {
   return {
-    ref: String(walked.node.ref_id ?? ""),
-    role: String(walked.node.role ?? "element"),
-    name: String(walked.node.name ?? walked.node.title ?? ""),
+    ...nodeIdentity(walked.node),
     description: describeCandidate(walked, { rich: true, values }),
     node: walked.node,
   };
@@ -231,14 +234,6 @@ export interface RunStateInput {
   textSupplied: boolean;
   candidates: readonly RunTarget[];
   recent: readonly RunRecentAction[];
-}
-
-function windowState(window: ActWindow): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  if (window.app) out.app = window.app;
-  if (window.id) out.id = window.id;
-  if (window.title) out.title = window.title;
-  return out;
 }
 
 /** The structured `state` sent to System One. Never includes caller text or live values. */
@@ -498,15 +493,6 @@ export interface GoalLoopResult {
   root: string | null;
   window: ActWindow;
   secrets: readonly string[];
-}
-
-function targetPayload(target: RunTarget | null): { ref: string; role: string; name: string } | null {
-  return target ? { ref: target.ref, role: target.role, name: target.name } : null;
-}
-
-export function targetLabel(target: RunTarget): string {
-  const name = target.name ? ` "${target.name}"` : "";
-  return `${target.role}${name} (${target.ref})`;
 }
 
 function windowFrom(data: AdSnapshotData, fallback: ActWindow): ActWindow {
