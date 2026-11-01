@@ -4,7 +4,7 @@
 
 **Blocked by:** 04: Single-Step Jev Intent Resolution and Execution (`cu_act`)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `cu_run` observes the target **Window** (using `--skeleton` overview first, or `--root` when drilled into a **Region**, and auto-switching to open **Overlay Surfaces**), constructs the per-Operation target lists (`CLICK`, `RIGHT_CLICK`, `TYPE_TEXT` via `set-value`, `CLEAR`, `SELECT`, `CHECK`, `UNCHECK`, `EXPAND`, `COLLAPSE`, `SCROLL_TO`, plus `DRILL`, `WIDEN`, `WAIT`, `DONE`, `BLOCKED`), and queries Jev for `operation` and `<operation>_target` in one call.
 - [x] Whenever the chosen target's confidence is in `[0.55, 0.90)` or `confirmDestructive: true`, `cu_run` evaluates destructive risk via `rateRisk` before routing, ensuring any `ctx.ui.confirm` prompt displays both target confidence and destructive probability.
@@ -13,3 +13,6 @@
 - [x] `cu_run` streams each turn's summary via `onUpdate`, computes SHA-1 screen fingerprints after mutating turns to detect whether the Window changed, and stops cleanly on `done`, `blocked`, `action_failed`, `window_closed`, `root_outside_window`, `surface_outside_window`, `40` operations, `80` Jev calls, or `3` consecutive non-`WAIT` turns with `changed: false`.
 - [x] Ship `skills/omarchy-cu/SKILL.md` and `README.md` documenting the 5 tools, `/cu` command, Intent/Goal phrasing rules, and Omarchy AT-SPI flags.
 - [x] End-to-end tool-seam tests verify multi-turn Goal completion, `DRILL`/`WIDEN` Region navigation, `rateRisk` + `ctx.ui.confirm` approval/decline, `TYPE_TEXT` vs `SELECT` queue consumption and redaction, and all budget/error stop conditions.
+
+## Comments
+- 2026-11-01: Implemented and merged on `integration` (commit 51a5f75768df528d5442ec9c984863e2a71f6e92). Tests: `npm test` (110 pass), `npx tsc --noEmit` clean.

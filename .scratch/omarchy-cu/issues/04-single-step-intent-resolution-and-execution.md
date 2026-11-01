@@ -4,7 +4,7 @@
 
 **Blocked by:** 02: Window, Region, and Overlay Surface Observation (`cu_observe`), 03: Deterministic Ref Execution, App Launch, and Clipboard Operations (`cu_ref`)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] `cu_act` collects nodes with a `ref_id`, withholds `disabled`, `hidden`, action-less nodes, and `cell` nodes directly inside a `treeitem`, and caps candidates at 254 options (recording a truncation note when exceeded).
 - [x] `cu_act` sends a single 5-question Jev System One request (`target` choice with `none`, `command` choice over the 11 Wayland-safe Operations, `present` noul, `destructive` noul, `needs_text` noul) and validates choice coherence.
@@ -13,3 +13,6 @@
 - [x] `cu_act` computes the deterministic **Route Decision** (`act` at `>= 0.70` or `>= 0.90` when `destructive >= 0.50`, `confirm` between `0.55` and the bar or when `confirmDestructive: true`, `abstain` below `0.55` or `present < 0.30` or `none`).
 - [x] When `execute: true` and the **Route Decision** is `confirm`, `cu_act` prompts via `ctx.ui.confirm` (when `ctx.hasUI` is true and `confirmPolicy !== "return"`), executing and setting `confirmedByUser: true` on approval, or returning `NOT_EXECUTED` when declined or headless.
 - [x] End-to-end tool-seam tests cover high-confidence `act`, top-5 reranking, verb reconciliation, missing-`SetValue` abstention, `needs_text`, and interactive vs headless `confirm` gating.
+
+## Comments
+- 2026-11-01: Implemented and merged on `integration` (commit 9bce979c000db46f18a24017665806bfcddb6af1). Tests: `npm test` (110 pass), `npx tsc --noEmit` clean.

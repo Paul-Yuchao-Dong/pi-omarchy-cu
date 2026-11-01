@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Standalone Pi package configuration (`package.json`, TypeScript config, test script, and extension entrypoint) loads cleanly and exposes injectable `CliRunner` and `DecisionClient` interfaces at the extension boundary.
 - [x] `CliRunner` resolves the `agent-desktop` binary (`AGENT_DESKTOP_BIN` → local `node_modules/.bin/agent-desktop` → `/tmp/ad-probe` fallback → `PATH`), enforces mode `0700` on `AGENT_DESKTOP_HOME` / `~/.agent-desktop` before execution, runs asynchronously without blocking the event loop, and aborts immediately when its `AbortSignal` fires.
@@ -12,3 +12,6 @@
 - [x] `cu_status` returns structured readiness data covering binary version, state directory permissions, AT-SPI bus status and supported surfaces, Jev configuration status, visible AT-SPI applications and Windows, and AT-SPI blind-spot warnings for running Chromium/Electron/Qt processes not registered on the bus.
 - [x] `/cu` slash command supports `/cu status`, `/cu apps`, and `/cu windows` for zero-token interactive inspection.
 - [x] Tool-seam tests and a live subprocess smoke test verify `cu_status`, `/cu`, `0700` directory enforcement, and `AbortSignal` cancellation.
+
+## Comments
+- 2026-11-01: Implemented and merged on `integration` (commit d707e2c1a2c70adc5461f34fa995ec717cb2e4ea). Tests: `npm test` (110 pass), `npx tsc --noEmit` clean.
