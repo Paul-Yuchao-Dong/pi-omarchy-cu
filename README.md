@@ -18,8 +18,12 @@ pi install /home/tuo/Projects/pi-omarchy-cu
 
 The package declares its extension and skill in `package.json`
 (`"pi": { "extensions": ["./extensions/index.ts"], "skills": ["./skills"] }`).
-It needs the `agent-desktop` CLI (resolved from `AGENT_DESKTOP_BIN`, the
-package-local `node_modules/.bin`, or `PATH`) and Jev credentials (below).
+
+`agent-desktop` ships as a package dependency, so the binary is resolved from
+`AGENT_DESKTOP_BIN`, then the package-local `node_modules/.bin`, then `PATH`.
+A local checkout is not installed by `pi install`, so run `npm install` once in
+the package directory; npm and git installs get the dependency automatically.
+It also needs Jev credentials (below).
 
 ## Tools
 
@@ -70,7 +74,7 @@ another AT-SPI client connected.
 
 | Variable | Effect |
 | --- | --- |
-| `AGENT_DESKTOP_BIN` | Explicit `agent-desktop` executable. |
+| `AGENT_DESKTOP_BIN` | Explicit `agent-desktop` executable; overrides the bundled dependency. |
 | `AGENT_DESKTOP_HOME` | State directory; created and enforced at `0700`. |
 | `PI_JEV_BASE_URL`, `TYPESAFE_BASE_URL` | Jev endpoint. HTTPS is required for remote hosts; plain HTTP is allowed only on loopback, and URLs with embedded credentials are rejected. |
 | `PI_JEV_MODEL`, `TYPESAFE_MODEL`, `TYPESAFE_DEFAULT_MODEL` | Decision model, resolved in that order. |

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtempSync, statSync } from "node:fs";
+import fs, { mkdtempSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { AgentDesktopCliRunner, parseEnvelope } from "../src/agent-desktop/runner.js";
@@ -309,4 +309,35 @@ test("sdk decision client exposes choice probabilities as the answer distributio
   });
   assert.equal(response.answers.target.value, "a");
   assert.deepEqual(response.answers.target.distribution, { a: 0.8, b: 0.2 });
+});
+
+test("package-local agent-desktop dependency wins over the probe fallback", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "cu-package-"));
+  const localDir = path.join(root, "node_modules", ".bin");
+  fs.mkdirSync(localDir, { recursive: true });
+  const local = path.join(localDir, "agent-desktop");
+  fs.writeFileSync(local, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+
+  const probe = path.join(root, "probe-agent-desktop");
+  fs.writeFileSync(probe, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+
+  const runner = new AgentDesktopCliRunner({
+    env: { AGENT_DESKTOP_HOME: path.join(root, "state") },
+    homedir: root,
+    packageRoot: root,
+    probePath: probe,
+    pathLookup: () => null,
+  });
+  assert.deepEqual(runner.resolve(), { binary: local, source: "package" });
+
+  const explicit = path.join(root, "explicit-agent-desktop");
+  fs.writeFileSync(explicit, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const overridden = new AgentDesktopCliRunner({
+    env: { AGENT_DESKTOP_BIN: explicit, AGENT_DESKTOP_HOME: path.join(root, "state") },
+    homedir: root,
+    packageRoot: root,
+    probePath: probe,
+    pathLookup: () => null,
+  });
+  assert.deepEqual(overridden.resolve(), { binary: explicit, source: "env" });
 });

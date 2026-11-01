@@ -65,7 +65,7 @@ const BINARY_NOT_FOUND: StatusError = {
   code: "BINARY_NOT_FOUND",
   message: "agent-desktop executable not found",
   suggestion:
-    "Install agent-desktop (npm install -g agent-desktop) or set AGENT_DESKTOP_BIN to its path.",
+    "Run npm install in the pi-omarchy-cu package (agent-desktop is a dependency), or set AGENT_DESKTOP_BIN to an existing agent-desktop executable.",
 };
 
 function statusError(envelope: AdEnvelope): StatusError {
