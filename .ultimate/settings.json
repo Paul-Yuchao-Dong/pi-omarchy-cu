@@ -1,0 +1,19 @@
+{
+  "modelFamilies": {
+    "families": {
+      "review": { "model": "opencode-go/gpt-6-luna", "thinking": "high" },
+      "fast": { "model": "opencode-go/gpt-5.6-luna" },
+      "tiny": { "model": "opencode-go/glm-5.3-flash", "thinking": "low" },
+      "design": { "model": "opencode-go/gemini-4-argon" }
+    }
+  },
+  "isolates": {
+    "worktree": {
+      "setup": ["npm ci --prefer-offline --no-audit --no-fund"]
+    }
+  },
+  "lander": {
+    "checks": [["npm test", "npx tsc --noEmit"]],
+    "push": "origin"
+  }
+}
