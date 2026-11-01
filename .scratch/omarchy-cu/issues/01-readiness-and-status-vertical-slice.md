@@ -6,9 +6,9 @@
 
 **Status:** ready-for-agent
 
-- [ ] Standalone Pi package configuration (`package.json`, TypeScript config, test script, and extension entrypoint) loads cleanly and exposes injectable `CliRunner` and `DecisionClient` interfaces at the extension boundary.
-- [ ] `CliRunner` resolves the `agent-desktop` binary (`AGENT_DESKTOP_BIN` → local `node_modules/.bin/agent-desktop` → `/tmp/ad-probe` fallback → `PATH`), enforces mode `0700` on `AGENT_DESKTOP_HOME` / `~/.agent-desktop` before execution, runs asynchronously without blocking the event loop, and aborts immediately when its `AbortSignal` fires.
-- [ ] In-process Jev configuration resolution matches `pi-jev` (`PI_JEV_BASE_URL` / `TYPESAFE_BASE_URL`, `PI_JEV_MODEL` / `TYPESAFE_MODEL`, `$TYPESAFE_API_KEY`, `~/.pi/agent/secrets/typesafe_api_key`, `$OPENROUTER_API_KEY`, `~/.pi/agent/secrets/openrouter_api_key`, OpenRouter `~typesafe/` model scoping, and HTTPS / loopback HTTP validation).
-- [ ] `cu_status` returns structured readiness data covering binary version, state directory permissions, AT-SPI bus status and supported surfaces, Jev configuration status, visible AT-SPI applications and Windows, and AT-SPI blind-spot warnings for running Chromium/Electron/Qt processes not registered on the bus.
-- [ ] `/cu` slash command supports `/cu status`, `/cu apps`, and `/cu windows` for zero-token interactive inspection.
-- [ ] Tool-seam tests and a live subprocess smoke test verify `cu_status`, `/cu`, `0700` directory enforcement, and `AbortSignal` cancellation.
+- [x] Standalone Pi package configuration (`package.json`, TypeScript config, test script, and extension entrypoint) loads cleanly and exposes injectable `CliRunner` and `DecisionClient` interfaces at the extension boundary.
+- [x] `CliRunner` resolves the `agent-desktop` binary (`AGENT_DESKTOP_BIN` → local `node_modules/.bin/agent-desktop` → `/tmp/ad-probe` fallback → `PATH`), enforces mode `0700` on `AGENT_DESKTOP_HOME` / `~/.agent-desktop` before execution, runs asynchronously without blocking the event loop, and aborts immediately when its `AbortSignal` fires.
+- [x] In-process Jev configuration resolution matches `pi-jev` (`PI_JEV_BASE_URL` / `TYPESAFE_BASE_URL`, `PI_JEV_MODEL` / `TYPESAFE_MODEL`, `$TYPESAFE_API_KEY`, `~/.pi/agent/secrets/typesafe_api_key`, `$OPENROUTER_API_KEY`, `~/.pi/agent/secrets/openrouter_api_key`, OpenRouter `~typesafe/` model scoping, and HTTPS / loopback HTTP validation).
+- [x] `cu_status` returns structured readiness data covering binary version, state directory permissions, AT-SPI bus status and supported surfaces, Jev configuration status, visible AT-SPI applications and Windows, and AT-SPI blind-spot warnings for running Chromium/Electron/Qt processes not registered on the bus.
+- [x] `/cu` slash command supports `/cu status`, `/cu apps`, and `/cu windows` for zero-token interactive inspection.
+- [x] Tool-seam tests and a live subprocess smoke test verify `cu_status`, `/cu`, `0700` directory enforcement, and `AbortSignal` cancellation.
