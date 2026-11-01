@@ -363,3 +363,13 @@ test("observe caps a wide snapshot for the model context", async () => {
   assert.ok(text.length <= 12_200, `expected a capped payload, got ${text.length} chars`);
   assert.match(text, /truncated at 12000 chars/);
 });
+
+test("observe forwards the AbortSignal to agent-desktop", async () => {
+  const cli = new FakeCliRunner(() => snapshotEnvelope());
+  const controller = new AbortController();
+  const tool = createObserveTool(makeDeps({ cli }));
+
+  await tool.execute("call-1", { action: "find", role: "button" }, controller.signal, undefined, makeContext());
+
+  assert.equal(cli.calls[0].options?.signal, controller.signal);
+});
