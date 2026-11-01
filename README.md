@@ -78,6 +78,11 @@ only foreground application is used and reported in `notes`. Several
 foreground applications are never guessed — the error names them so the caller
 can pass `app` or `windowId`.
 
+Terminal/TUI apps (cliamp, nvim, btop) and apps with their own CLI/IPC belong on
+the shell side, not here: the extension reports them as undrivable and the
+companion skill shows the CLI recipe (for example
+`cliamp remote call provider.search` then `cliamp open 'cliamp://play?url=...'`).
+
 An application that never joined the AT-SPI bus gets a specific explanation:
 GUI toolkits get their relaunch flags, an app that is not running gets
 `cu_ref` launch guidance, and terminal/TUI applications (cliamp, nvim, btop)

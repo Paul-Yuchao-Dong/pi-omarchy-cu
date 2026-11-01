@@ -38,6 +38,36 @@ that is out of scope by ADR-0002 and does not work on Hyprland Wayland.
 - On `abstain`, read `why` instead of retrying the same Intent. On `needs_text`,
   re-run with `text`.
 
+## When not to use these tools
+
+`cu_*` drives **GUI** applications through AT-SPI. Two classes of request need
+the shell instead:
+
+- **Terminal/TUI apps** (cliamp, nvim, btop, lazygit): their content lives inside
+  a terminal, which never joins the AT-SPI bus, and Hyprland Wayland blocks
+  synthetic keystrokes. `cu_act`/`cu_run` will report them as undrivable — that
+  is a fact, not a retryable error.
+- **Apps with their own CLI or IPC**: prefer that interface; it is deterministic
+  and needs no accessibility tree.
+
+Worked example — "play NCS Chill radio station on cliamp":
+
+```bash
+# 1. find the station through cliamp's own v2 IPC (read-only)
+cliamp remote call provider.search --wait \
+  --params '{"provider":"radio","query":"NCS Chill"}'
+# -> tracks[0].path = https://radio.cliamp.stream/ncs-chill/stream
+
+# 2. play or queue it (cliamp is already running, so this goes over IPC)
+cliamp open 'cliamp://play?url=https://radio.cliamp.stream/ncs-chill/stream'
+cliamp remote state            # verify "state":"playing" and the track title
+```
+
+The same pattern applies to any app that exposes a CLI: `playerctl` for MPRIS
+players, `wpctl` for PipeWire volume, `omarchy` for desktop actions. Do not
+shell out to point-and-click tools (`wtype`, `ydotool`, `hyprctl` input,
+`grim`) — ADR-0002 forbids it.
+
 ## Which application to drive
 
 - Pass `app` with a name from `cu_status` apps (or a desktop-entry name). Casing
