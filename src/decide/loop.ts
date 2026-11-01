@@ -11,12 +11,7 @@
  * Route Decision.
  */
 
-import {
-  collectCandidates,
-  screenFingerprint,
-  truncatedRegions,
-  type WalkedNode,
-} from "../desktop/tree.js";
+import { collectCandidates, truncatedRegions, type WalkedNode } from "../desktop/tree.js";
 import {
   RUN_ELEMENT_OPERATIONS,
   RUN_TERMINAL_OPERATIONS,

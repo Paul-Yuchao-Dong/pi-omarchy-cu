@@ -19,7 +19,6 @@ import { buildRefArgs, refDelivery, refNeedsText } from "../agent-desktop/ref.js
 import {
   collectActCandidates,
   resolveActStep,
-  type ActCandidate,
   type ActCandidateCollection,
   type ActStepResolution,
 } from "../decide/act.js";
