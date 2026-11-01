@@ -1,0 +1,3 @@
+# In-Process Jev System One Client Over Tool Delegation or CLI Scripts
+
+To resolve intents (`cu_act`) and drive multi-step goals (`cu_run`) without loading 150-element accessibility trees into Pi's LLM context or depending on an external git clone of `agent-desktop`, `pi-omarchy-cu` calls `@typesafe-ai/sdk` in-process using `pi-jev`'s credential, OpenRouter, and custom endpoint (`PI_JEV_BASE_URL` / `TYPESAFE_BASE_URL`) resolution order. In Pi's extension API, a tool cannot synchronously invoke another extension's `jev_evaluate` tool mid-execution without returning to the main LLM turn, and `jev-desktop` relies on structured object `instructions` and `criteria` in `choice()` calls that `@typesafe-ai/sdk` supports directly.
