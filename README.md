@@ -70,6 +70,20 @@ client, its disconnect can crash the Electron accessibility bridge (VS Code
 exits with SIGSEGV). A GNOME desktop keeps the shell connected; on Hyprland keep
 another AT-SPI client connected.
 
+## Application scoping and terminal apps
+
+`cu_act` and `cu_run` scope themselves: a loosely-named `app` is resolved
+against `list-apps` (casing and near-misses included), and with no `app` the
+only foreground application is used and reported in `notes`. Several
+foreground applications are never guessed — the error names them so the caller
+can pass `app` or `windowId`.
+
+An application that never joined the AT-SPI bus gets a specific explanation:
+GUI toolkits get their relaunch flags, an app that is not running gets
+`cu_ref` launch guidance, and terminal/TUI applications (cliamp, nvim, btop)
+are reported as undrivable, because terminal content is not on the bus and
+Hyprland Wayland blocks synthetic keystrokes.
+
 ## Environment variables
 
 | Variable | Effect |

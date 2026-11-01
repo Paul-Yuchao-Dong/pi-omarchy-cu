@@ -185,6 +185,11 @@ export async function buildStatusReport(
     : [];
   if (windowsError && resolution) {
     warnings.push(`agent-desktop list-windows failed: ${describeError(windowsError)}`);
+  } else if (apps.length > 0 && windows.length === 0) {
+    warnings.push(
+      "Applications are registered on the AT-SPI bus but report no accessible Windows yet: " +
+        "the window may still be starting, or the app is windowless/background-only. Retry, or pass `app`/`windowId` explicitly.",
+    );
   }
 
   const jev = deps.decision.describe();

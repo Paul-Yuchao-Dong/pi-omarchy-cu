@@ -1,4 +1,5 @@
 import type { TSchema } from "@sinclair/typebox";
+import { desktopErrorGuidance, type DesktopErrorContext } from "../agent-desktop/scope.js";
 import type {
   AdEnvelope,
   CuContentBlock,
@@ -76,6 +77,39 @@ export function envelopeError(envelope: AdEnvelope, context?: string): CuToolRes
     command: envelope.command,
     details: error?.details,
     disposition: error?.disposition,
+  });
+}
+
+/**
+ * A failed desktop read with a next-step sentence attached.
+ *
+ * `agent-desktop` reports codes and raw suggestions; this adds the facts only
+ * the extension knows (ambiguous foreground scope, app not running, terminal
+ * apps that can never join the bus).
+ */
+export function desktopErrorMessage(
+  envelope: AdEnvelope,
+  context: DesktopErrorContext & { action?: string } = {},
+): { code: string; message: string; guidance: string | null } {
+  const error = envelope.error;
+  const code = error?.code ?? "AGENT_DESKTOP_ERROR";
+  const base = error?.message ?? `agent-desktop ${envelope.command ?? "command"} failed`;
+  const action = context.action ? `${context.action}: ` : "";
+  const guidance = desktopErrorGuidance(envelope, context);
+  return { code, message: guidance ? `${action}${base} — ${guidance}` : `${action}${base}`, guidance };
+}
+
+export function desktopErrorResult(
+  envelope: AdEnvelope,
+  context: DesktopErrorContext & { action?: string } = {},
+): CuToolResult {
+  const error = envelope.error;
+  const { code, message, guidance } = desktopErrorMessage(envelope, context);
+  return errorResult(code, message, {
+    command: envelope.command,
+    details: error?.details,
+    disposition: error?.disposition,
+    guidance,
   });
 }
 

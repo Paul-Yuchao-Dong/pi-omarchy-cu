@@ -151,8 +151,8 @@ test("cu_run drives a multi-turn Goal to done through click and check", async ()
   assert.equal(details.turns, 3);
   assert.equal(details.operations, 2);
   assert.equal(details.jev_calls, 3);
-  assert.deepEqual(runner.argLists("click"), [["click", "@s1:e1", "--app", "Preferences"]]);
-  assert.deepEqual(runner.argLists("check"), [["check", "@s1:e2", "--app", "Preferences"]]);
+  assert.deepEqual(runner.argLists("click"), [["click", "@s1:e1"]]);
+  assert.deepEqual(runner.argLists("check"), [["check", "@s1:e2"]]);
   assert.deepEqual(
     details.recent_actions.map((action: any) => [action.operation, action.target.ref, action.delivery]),
     [
@@ -376,7 +376,7 @@ test("cu_run rates destructive risk before prompting and shows both probabilitie
   assert.equal(details.stop, "done");
   assert.equal(details.operations, 1);
   assert.equal(details.recent_actions[0].confirmedByUser, true);
-  assert.deepEqual(runner.argLists("click"), [["click", "@s1:e1", "--app", "Preferences"]]);
+  assert.deepEqual(runner.argLists("click"), [["click", "@s1:e1"]]);
 });
 
 test("cu_run stops with the confirm candidate when the prompt is declined", async () => {
@@ -493,9 +493,9 @@ test("cu_run types a sensitive string and selects a plain label from the same qu
   const details = result.details as any;
 
   assert.deepEqual(runner.argLists("set-value"), [
-    ["set-value", "@s1:e1", "hunter2-secret", "--app", "Preferences"],
+    ["set-value", "@s1:e1", "hunter2-secret"],
   ]);
-  assert.deepEqual(runner.argLists("select"), [["select", "@s1:e2", "Dark Mode", "--app", "Preferences"]]);
+  assert.deepEqual(runner.argLists("select"), [["select", "@s1:e2", "Dark Mode"]]);
   assert.equal(details.operations, 2);
   assert.ok(result.content[0].text.includes("[redacted]"));
   assert.ok(!result.content[0].text.includes("hunter2-secret"));
@@ -785,7 +785,7 @@ test("cu_run observes an open Overlay Surface instead of the Window behind it", 
     ["snapshot", "--app", "Preferences", "-i", "--surface", "sheet"],
   ]);
   assert.equal(details.surface, "sheet");
-  assert.deepEqual(runner.argLists("click"), [["click", "@s2:e1", "--app", "Preferences"]]);
+  assert.deepEqual(runner.argLists("click"), [["click", "@s2:e1"]]);
   assert.ok(details.notes.some((note: string) => /Overlay Surface/.test(note)));
 });
 

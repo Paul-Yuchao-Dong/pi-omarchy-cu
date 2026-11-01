@@ -49,13 +49,17 @@ export function setValueHyprlandDiagnostic(action: string, code: string): string
   return HYPRLAND_SET_VALUE_DIAGNOSTIC;
 }
 
-type NarrowingInput = Pick<RefInput, "app" | "windowId">;
-
-/** `select <ref> <option>`, `set-value <ref> <value>`, every other Operation `<command> <ref>`. */
+/**
+ * `select <ref> <option>`, `set-value <ref> <value>`, every other Operation
+ * `<command> <ref>`.
+ *
+ * A qualified Ref already names its snapshot and Window, so Ref commands accept
+ * neither `--app` nor `--window-id`; passing them is an INVALID_ARGS failure
+ * after a successful resolution.
+ */
 export function buildRefArgs(action: ActOperation, ref: string, input: RefInput): string[] {
   const args = [action, ref];
   if (refNeedsText(action) && input.text !== undefined) args.push(input.text);
-  args.push(...narrowingArgs(input));
   return args;
 }
 
@@ -121,9 +125,9 @@ export function buildLaunchArgs(app: string, input: RefInput): string[] {
   return args;
 }
 
-/** `get <ref> --property value`, narrowed to the same Window as the Ref operation. */
-export function buildGetPropertyArgs(ref: string, property: string, input: NarrowingInput): string[] {
-  return ["get", ref, "--property", property, ...narrowingArgs(input)];
+/** `get <ref> --property value`; like every Ref command it takes no app/window narrowing. */
+export function buildGetPropertyArgs(ref: string, property: string): string[] {
+  return ["get", ref, "--property", property];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

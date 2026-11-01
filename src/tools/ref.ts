@@ -132,7 +132,7 @@ async function runRefOperation(
   const evidence = refEvidence(run.envelope, action, params.ref);
   if (params.verify === true) {
     const read = await deps.runner.run(
-      buildGetPropertyArgs(params.ref, "value", params),
+      buildGetPropertyArgs(params.ref, "value"),
       commandOptions(params, signal),
     );
     evidence.verify = verifyEvidence(read.envelope);

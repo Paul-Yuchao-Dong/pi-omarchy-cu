@@ -89,19 +89,29 @@ test("cu_ref never offers pruned X11 and Mutter-only operations", () => {
   }
 });
 
-test("cu_ref forwards app, window-id, timeout, and the abort signal", async () => {
+test("cu_ref never forwards app or window-id to a Ref command, but forwards timeout and abort", async () => {
   const cli = new FakeCliRunner((args) => okEnvelope(args[0] ?? "unknown", { ref: REF }));
   const controller = new AbortController();
 
+  // A qualified Ref owns its snapshot and Window; agent-desktop rejects
+  // `click <ref> --app ...` with INVALID_ARGS, so the narrowing must be dropped.
   await callRef(
     { action: "click", ref: REF, app: "Firefox", windowId: "w-9", timeoutMs: 5000 },
     cli,
     { signal: controller.signal },
   );
+  await callRef({ action: "set-value", ref: REF, text: "42", app: "Firefox", windowId: "w-9" }, cli);
+  await callRef({ action: "select", ref: REF, text: "Dark Mode", windowId: "w-9" }, cli);
 
-  assert.deepEqual(lastArgs(cli), ["click", REF, "--app", "Firefox", "--window-id", "w-9"]);
+  assert.deepEqual(lastArgs(cli), ["select", REF, "Dark Mode"]);
+  assert.equal(cli.invocations("click")[0]?.args.includes("--app"), false);
+  assert.equal(cli.invocations("set-value")[0]?.args.includes("--window-id"), false);
   assert.equal(cli.calls[0]?.options?.timeoutMs, 5000);
   assert.equal(cli.calls[0]?.options?.signal, controller.signal);
+
+  // `wait` does accept --app; it is not a Ref command.
+  await callRef({ action: "wait", window: "Save As", app: "Firefox" }, cli);
+  assert.deepEqual(lastArgs(cli), ["wait", "--window", "Save As", "--app", "Firefox"]);
 });
 
 test("cu_ref reports delivered_verified with post-state and step evidence", async () => {
@@ -327,7 +337,7 @@ test("cu_ref verify reads the target's value after a Ref operation", async () =>
     await callRef({ action: "set-value", ref: REF, text: "42", windowId: "w-1", verify: true }, cli),
   );
 
-  assert.deepEqual(cli.calls[1]?.args, ["get", REF, "--property", "value", "--window-id", "w-1"]);
+  assert.deepEqual(cli.calls[1]?.args, ["get", REF, "--property", "value"]);
   assert.deepEqual(evidence.verify, { property: "value", ok: true, value: "42" });
   assert.equal(evidence.disposition.delivery, "delivered_verified");
 });

@@ -16,6 +16,14 @@ import type {
   RouteDecision,
 } from "../types.js";
 import { buildRefArgs, refDelivery, refNeedsText } from "../agent-desktop/ref.js";
+import { NO_ACTIONABLE_NODES } from "../agent-desktop/apps.js";
+import {
+  appAliasNote,
+  autoScopeApp,
+  autoScopeNote,
+  resolveAppName,
+  type AutoScope,
+} from "../agent-desktop/scope.js";
 import {
   collectActCandidates,
   resolveActStep,
@@ -25,11 +33,12 @@ import {
 import { detectOverlay, snapshotWindowId } from "../desktop/tree.js";
 import { targetLabel, targetPayload } from "../decide/shared.js";
 import { isAbortError } from "../jev/abort.js";
-import { confirmationMessage, confirmationTitle } from "../policy/route.js";
+import { ACTION_BAR, confirmationMessage, confirmationTitle } from "../policy/route.js";
 import { redactDeep, TextQueue } from "../text/queue.js";
 import { ActParams, type ActInput } from "./schemas.js";
 import { overlaySwitchedNote, overlayUnreadableNote, snapshotArgs } from "./snapshot-args.js";
 import {
+  desktopErrorResult,
   envelopeError,
   errorResult,
   formatForModel,
@@ -46,7 +55,9 @@ export const ACT_DESCRIPTION =
   "destructive risk, and text need, reranks the top 5 candidates with richer descriptions when target confidence is below " +
   "0.70, reconciles the chosen Operation against the node's Advertised Actions over the 11 Wayland-safe Operations, applies " +
   "the deterministic Route Decision (act, confirm, abstain, needs_text), asks the user to confirm risky or ambiguous steps, " +
-  "and executes. Defaults to a dry run (`execute: false`). Returns compact evidence, never the tree.";
+  "and executes. Defaults to a dry run (`execute: false`). When `app`/`windowId` are omitted and exactly one foreground " +
+  "application is registered it is scoped automatically; a loosely-named app is resolved against `list-apps`, and a " +
+  "terminal/TUI app (cliamp, nvim) is explained instead of retried. Returns compact evidence, never the tree.";
 
 /** Structured result details, alongside the model-facing JSON payload. */
 export interface ActDetails {
@@ -116,33 +127,57 @@ async function observeSurface(
   params: ActInput,
   signal: AbortSignal | undefined,
 ): Promise<Observation | { error: CuToolResult }> {
+  const scope = await autoScopeApp(deps, params, signal);
+  const notes: string[] = [];
+  if (scope.autoScopedApp) notes.push(autoScopeNote(scope.autoScopedApp));
+
+  let effective: ActInput = scope.app && scope.app !== params.app ? { ...params, app: scope.app } : params;
   const pinned = params.surface ?? null;
-  const first = await deps.runner.run(actSnapshotArgs(params, pinned), runOptions(params, signal));
+  let first = await deps.runner.run(actSnapshotArgs(effective, pinned), runOptions(params, signal));
+
+  // "cliamp" or "Files" may be listed under a different name or casing.
+  let suggestions: string[] = [];
+  if (!first.envelope.ok && first.envelope.error?.code === "APP_NOT_FOUND" && effective.app) {
+    const resolution = await resolveAppName(deps, effective.app, signal);
+    suggestions = resolution.matches;
+    if (resolution.name && resolution.changed) {
+      notes.push(appAliasNote(effective.app, resolution.name));
+      effective = { ...effective, app: resolution.name };
+      suggestions = [];
+      first = await deps.runner.run(actSnapshotArgs(effective, pinned), runOptions(params, signal));
+    }
+  }
+
   if (!first.envelope.ok) {
     return {
-      error: envelopeError(first.envelope, pinned ? `snapshot --surface ${pinned}` : "snapshot"),
+      error: desktopErrorResult(first.envelope, {
+        app: effective.app ?? null,
+        candidates: scope.foreground,
+        suggestions,
+        action: pinned ? `snapshot --surface ${pinned}` : "snapshot",
+      }),
     };
   }
   const data = (first.envelope.data ?? {}) as AdSnapshotData;
-  if (pinned) return { data, surface: pinned, autoSurface: false, notes: [] };
+  if (pinned) return { data, surface: pinned, autoSurface: false, notes };
 
   const overlay = detectOverlay(data);
-  if (!overlay) return { data, surface: null, autoSurface: false, notes: [] };
+  if (!overlay) return { data, surface: null, autoSurface: false, notes };
 
-  const second = await deps.runner.run(actSnapshotArgs(params, overlay.kind), runOptions(params, signal));
+  const second = await deps.runner.run(actSnapshotArgs(effective, overlay.kind), runOptions(params, signal));
   if (!second.envelope.ok) {
     return {
       data,
       surface: null,
       autoSurface: false,
-      notes: [overlayUnreadableNote(overlay.kind, second.envelope.error?.code ?? "error")],
+      notes: [...notes, overlayUnreadableNote(overlay.kind, second.envelope.error?.code ?? "error")],
     };
   }
   return {
     data: (second.envelope.data ?? {}) as AdSnapshotData,
     surface: overlay.kind,
     autoSurface: true,
-    notes: [overlaySwitchedNote(overlay.kind)],
+    notes: [...notes, overlaySwitchedNote(overlay.kind)],
   };
 }
 
@@ -303,6 +338,30 @@ export function createActTool(deps: CuDeps): CuTool {
 
       const queue = new TextQueue(params.text);
       const collection = collectActCandidates(observation.data.tree, { values: params.noValues !== true });
+
+      if (collection.candidates.length === 0) {
+        const notes = [...observation.notes, NO_ACTIONABLE_NODES];
+        const payload: Record<string, unknown> = {
+          ok: true,
+          decision: "abstain",
+          why: NO_ACTIONABLE_NODES,
+          bar: ACTION_BAR,
+          target: null,
+          operation: null,
+          reconciled: false,
+          reconciled_note: null,
+          reranked: false,
+          confidence: 0,
+          present: 0,
+          destructive: null,
+          surface: observation.surface,
+          execute: params.execute === true,
+          executed: false,
+          notes,
+        };
+        const details = detailsFrom(payload);
+        return actResult(payload, details, queue, params.redactText === true);
+      }
 
       let step: ActStepResolution;
       try {

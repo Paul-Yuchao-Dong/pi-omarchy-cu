@@ -124,7 +124,7 @@ test("cu_act executes a high-confidence click with the exact mutating CLI args",
   assert.deepEqual(runner.argLists("snapshot"), [
     ["snapshot", "--app", "Notes", "-i", "--compact", "--include-bounds", "--skeleton"],
   ]);
-  assert.deepEqual(runner.argLists("click"), [["click", "@s1:e1", "--app", "Notes"]]);
+  assert.deepEqual(runner.argLists("click"), [["click", "@s1:e1"]]);
   assert.equal(result.isError, undefined);
   assert.equal(details.decision, "act");
   assert.deepEqual(details.target, { ref: "@s1:e1", role: "button", name: "List View" });
@@ -413,7 +413,7 @@ test("cu_act confirms an ambiguous step in the UI and executes it when approved"
   assert.match(prompt.message, /Target: button "List View" \(@s1:e1\)/);
   assert.match(prompt.message, /Target confidence: 0\.62/);
   assert.match(prompt.message, /Destructive risk: 0\.15/);
-  assert.deepEqual(runner.argLists("click"), [["click", "@s1:e1", "--app", "Notes"]]);
+  assert.deepEqual(runner.argLists("click"), [["click", "@s1:e1"]]);
   assert.equal(details.decision, "confirm");
   assert.equal(details.executed, true);
   assert.equal(details.confirmedByUser, true);
@@ -564,7 +564,7 @@ test("cu_act redacts caller-supplied set-value text from tool output when redact
   const details = result.details as any;
 
   assert.deepEqual(runner.argLists("set-value"), [
-    ["set-value", "@s1:e1", "hunter2-secret", "--app", "Notes"],
+    ["set-value", "@s1:e1", "hunter2-secret"],
   ]);
   assert.ok(result.content[0].text.includes("[redacted]"));
   assert.ok(!result.content[0].text.includes("hunter2-secret"));
@@ -599,7 +599,7 @@ test("cu_act never treats a SELECT option label as a secret", async () => {
   );
 
   assert.deepEqual(runner.argLists("select"), [
-    ["select", "@s1:e1", "Dark Mode", "--app", "Prefs"],
+    ["select", "@s1:e1", "Dark Mode"],
   ]);
   assert.ok(result.content[0].text.includes("Dark Mode"));
   assert.ok(!result.content[0].text.includes("[redacted]"));

@@ -11,6 +11,7 @@
  * Route Decision.
  */
 
+import { NO_ACTIONABLE_NODES } from "../agent-desktop/apps.js";
 import { collectCandidates, truncatedRegions, type WalkedNode } from "../desktop/tree.js";
 import {
   RUN_ELEMENT_OPERATIONS,
@@ -525,6 +526,7 @@ export async function runGoalLoop(
   let surface: string | null = null;
   let confirm: RunConfirmCandidate | null = null;
   let window: ActWindow = { ...input.window };
+  let advisedNoTargets = false;
 
   const addNote = (note: string): void => {
     if (!notes.includes(note)) notes.push(note);
@@ -573,6 +575,10 @@ export async function runGoalLoop(
       values: input.noValues !== true,
     });
     for (const note of plan.notes) addNote(note);
+    if (plan.targets.length === 0 && !advisedNoTargets) {
+      advisedNoTargets = true;
+      addNote(NO_ACTIONABLE_NODES + "; only WAIT, DONE, or BLOCKED can move the Goal forward");
+    }
 
     const request: DecisionRequest = {
       state: runState({

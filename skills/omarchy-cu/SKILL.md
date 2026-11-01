@@ -38,6 +38,25 @@ that is out of scope by ADR-0002 and does not work on Hyprland Wayland.
 - On `abstain`, read `why` instead of retrying the same Intent. On `needs_text`,
   re-run with `text`.
 
+## Which application to drive
+
+- Pass `app` with a name from `cu_status` apps (or a desktop-entry name). Casing
+  and near-misses are resolved against `list-apps`, so `"notes"` reaches
+  `Notes`.
+- Omit `app` when only one application is in the foreground: `cu_act` and
+  `cu_run` scope to it automatically and say so in `notes`.
+- With several foreground applications nothing is guessed. The error lists
+  them; pass `app` or `windowId` instead of retrying.
+- An application that is not running gets launch guidance: `cu_ref` with
+  `action: "launch"` and that `app`, which injects the accessibility
+  environment.
+- **Terminal/TUI applications cannot be driven.** cliamp, nvim, btop, and
+  friends draw inside a terminal that never joins the AT-SPI bus, and Hyprland
+  Wayland blocks synthetic keystrokes. Requests like "play NCS Chill on
+  cliamp" explain that and stop; use the shell or the app's own CLI instead.
+  The same applies to a canvas with no accessible nodes: `cu_act` returns
+  `abstain` without spending a decision call.
+
 ## Text supply
 
 - `cu_act` and `cu_run` take `text: string | string[]`. `TYPE_TEXT` (executed as

@@ -332,7 +332,8 @@ async function observeGetOrIs(
     });
   }
 
-  const args = [action, params.ref, ...narrowingArgs(params)];
+  // `get` and `is` address a qualified Ref; they accept no app/window-id.
+  const args = [action, params.ref];
   if (params.property) args.push("--property", params.property);
   args.push(...timeoutArgs(params));
 

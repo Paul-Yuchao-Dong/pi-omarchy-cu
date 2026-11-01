@@ -15,6 +15,8 @@ import type {
   RunOperation,
 } from "../types.js";
 import { buildRefArgs, refDelivery } from "../agent-desktop/ref.js";
+import { NO_ACTIONABLE_NODES } from "../agent-desktop/apps.js";
+import { appAliasNote, autoScopeApp, autoScopeNote, resolveAppName } from "../agent-desktop/scope.js";
 import { targetLabel } from "../decide/shared.js";
 import {
   DEFAULT_MAX_JEV_CALLS,
@@ -37,6 +39,7 @@ import { redactDeep, type TextSupply } from "../text/queue.js";
 import { RunParams, type RunInput } from "./schemas.js";
 import { overlaySwitchedNote, overlayUnreadableNote, snapshotArgs } from "./snapshot-args.js";
 import {
+  desktopErrorMessage,
   errorResult,
   formatForModel,
   textResult,
@@ -52,7 +55,8 @@ export const RUN_DESCRIPTION =
   "the terminal Operations (WAIT, DONE, BLOCKED). Destructive risk is rated before any confirmation, each turn is streamed via " +
   "progress updates, and loops stop on done, blocked, action_failed, window_closed, root_outside_window, surface_outside_window, " +
   `${DEFAULT_MAX_OPERATIONS} operations, ${DEFAULT_MAX_JEV_CALLS} decision calls, or ${DEFAULT_MAX_UNCHANGED_TURNS} consecutive ` +
-  "non-WAIT turns with an unchanged screen fingerprint.";
+  "non-WAIT turns with an unchanged screen fingerprint. Unscoped Goals are auto-scoped to the only foreground " +
+  "application, loosely-named apps are resolved against `list-apps`, and terminal/TUI apps are reported as undrivable.";
 
 /** Structured result details, alongside the model-facing JSON payload. */
 export interface RunDetails {
@@ -80,9 +84,9 @@ type RunOptions = { signal?: AbortSignal; timeoutMs?: number };
  * The shallow Window read. A drilled read re-roots at the Region instead of
  * skeletonising, so the Region's withheld children are actually read.
  */
-function windowSnapshotArgs(params: RunInput, root: string | null): string[] {
+function windowSnapshotArgs(params: RunInput, root: string | null, app?: string | null): string[] {
   return snapshotArgs({
-    app: params.app,
+    app: app ?? params.app,
     windowId: params.windowId,
     root,
     timeoutMs: params.timeoutMs,
@@ -90,9 +94,9 @@ function windowSnapshotArgs(params: RunInput, root: string | null): string[] {
 }
 
 /** The Overlay Surface read passes `-i` alone: agent-desktop forbids `--skeleton` on a surface. */
-function surfaceSnapshotArgs(params: RunInput, surface: string): string[] {
+function surfaceSnapshotArgs(params: RunInput, surface: string, app?: string | null): string[] {
   return snapshotArgs({
-    app: params.app,
+    app: app ?? params.app,
     windowId: params.windowId,
     surface,
     timeoutMs: params.timeoutMs,
@@ -117,22 +121,46 @@ async function observeWindow(
   root: string | null,
   signal: AbortSignal | undefined,
 ): Promise<ObserveOutcome> {
-  const windowCall = await deps.runner.run(windowSnapshotArgs(params, root), runOptions(params, signal));
+  const scope = await autoScopeApp(deps, params, signal);
+  const notes: string[] = [];
+  if (scope.autoScopedApp) notes.push(autoScopeNote(scope.autoScopedApp));
+
+  let app: string | null = scope.app ?? params.app ?? null;
+  let windowCall = await deps.runner.run(windowSnapshotArgs(params, root, app), runOptions(params, signal));
+
+  // Resolve a loosely-named application ("cliamp", "Files") against list-apps.
+  let suggestions: string[] = [];
+  if (!windowCall.envelope.ok && windowCall.envelope.error?.code === "APP_NOT_FOUND" && app) {
+    const resolution = await resolveAppName(deps, app, signal);
+    suggestions = resolution.matches;
+    if (resolution.name && resolution.changed) {
+      notes.push(appAliasNote(app, resolution.name));
+      app = resolution.name;
+      suggestions = [];
+      windowCall = await deps.runner.run(windowSnapshotArgs(params, root, app), runOptions(params, signal));
+    }
+  }
+
   if (!windowCall.envelope.ok) {
+    const enriched = desktopErrorMessage(windowCall.envelope, {
+      app,
+      candidates: scope.foreground,
+      suggestions,
+      action: root ? "snapshot --root" : "snapshot",
+    });
     return {
       ok: false,
-      stop: stopCode(windowCall.envelope.error?.code),
-      code: windowCall.envelope.error?.code ?? "AGENT_DESKTOP_ERROR",
-      message: windowCall.envelope.error?.message,
+      stop: stopCode(enriched.code),
+      code: enriched.code,
+      message: enriched.message,
     };
   }
-  const notes: string[] = [];
   let data = (windowCall.envelope.data ?? {}) as AdSnapshotData;
   let surface: string | null = null;
 
   const overlay = root === null ? detectOverlay(data) : null;
   if (overlay) {
-    const surfaceCall = await deps.runner.run(surfaceSnapshotArgs(params, overlay.kind), runOptions(params, signal));
+    const surfaceCall = await deps.runner.run(surfaceSnapshotArgs(params, overlay.kind, app), runOptions(params, signal));
     if (surfaceCall.envelope.ok) {
       data = (surfaceCall.envelope.data ?? {}) as AdSnapshotData;
       surface = overlay.kind;
