@@ -76,6 +76,7 @@ another AT-SPI client connected.
 | --- | --- |
 | `AGENT_DESKTOP_BIN` | Explicit `agent-desktop` executable; overrides the bundled dependency. |
 | `AGENT_DESKTOP_HOME` | State directory; created and enforced at `0700`. |
+| `WAYLAND_DISPLAY`, `DISPLAY` | Passed through to `agent-desktop`. When unset (Herdr server, systemd, SSH, or container pane), the extension derives them from the newest `/run/user/<uid>/wayland-*` socket and the lowest `/tmp/.X11-unix/X<n>`; explicit values always win. |
 | `PI_JEV_BASE_URL`, `TYPESAFE_BASE_URL` | Jev endpoint, as an API root (`https://api.typesafe.ai`) or the full `.../v1/systemone` endpoint; both resolve to the same request URL. HTTPS is required for remote hosts; plain HTTP is allowed only on loopback, and URLs with embedded credentials are rejected. |
 | `PI_JEV_MODEL`, `TYPESAFE_MODEL`, `TYPESAFE_DEFAULT_MODEL` | Decision model, resolved in that order. |
 | `TYPESAFE_API_KEY`, `OPENROUTER_API_KEY` | API keys. The `pi` secret files `~/.pi/agent/secrets/typesafe_api_key` and `~/.pi/agent/secrets/openrouter_api_key` are read when the variables are unset. |

@@ -10,6 +10,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { withDisplayFallback } from "../system/display.js";
 import type {
   AdEnvelope,
   BinaryResolution,
@@ -162,7 +163,12 @@ export class AgentDesktopCliRunner implements CliRunner {
     }
 
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    const env: NodeJS.ProcessEnv = { ...this.env, ...(options.env ?? {}) };
+    // A pane can have a working AT-SPI bus and no display variables; derive
+    // them from the compositor sockets so the child can list applications.
+    const env: NodeJS.ProcessEnv = withDisplayFallback({
+      ...this.env,
+      ...(options.env ?? {}),
+    }).env;
 
     return new Promise<CliRunResult>((resolvePromise) => {
       execFile(
