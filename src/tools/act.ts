@@ -19,14 +19,16 @@ import { buildRefArgs, refDelivery, refNeedsText } from "../agent-desktop/ref.js
 import {
   collectActCandidates,
   resolveActStep,
-  type ActCandidate,
   type ActCandidateCollection,
   type ActStepResolution,
 } from "../decide/act.js";
 import { detectOverlay, snapshotWindowId } from "../desktop/tree.js";
+import { targetLabel, targetPayload } from "../decide/shared.js";
+import { isAbortError } from "../jev/abort.js";
 import { confirmationMessage, confirmationTitle } from "../policy/route.js";
 import { redactDeep, TextQueue } from "../text/queue.js";
 import { ActParams, type ActInput } from "./schemas.js";
+import { overlaySwitchedNote, overlayUnreadableNote, snapshotArgs } from "./snapshot-args.js";
 import {
   envelopeError,
   errorResult,
@@ -73,20 +75,20 @@ type RunOptions = { signal?: AbortSignal; timeoutMs?: number };
 /* -------------------------------------------------------------------------- */
 
 /**
- * `snapshot` arguments. The Window read keeps the shallow skeleton overview;
- * a surface read passes `-i` alone because agent-desktop forbids `--skeleton`
- * on a surface and popup trees are already small.
+ * `snapshot` arguments for the Intent observation: the Window read keeps the
+ * shallow skeleton overview and a surface read passes `-i` alone.
  */
-function snapshotArgs(params: ActInput, surface: string | null): string[] {
-  const args = ["snapshot"];
-  if (params.app) args.push("--app", params.app);
-  if (params.windowId) args.push("--window-id", params.windowId);
-  args.push("-i");
-  if (surface) args.push("--surface", surface);
-  else args.push("--compact", "--include-bounds", "--skeleton");
-  if (params.maxDepth !== undefined) args.push("--max-depth", String(params.maxDepth));
-  if (params.timeoutMs !== undefined) args.push("--timeout-ms", String(params.timeoutMs));
-  return args;
+function actSnapshotArgs(params: ActInput, surface: string | null): string[] {
+  const windowRead = surface === null;
+  return snapshotArgs({
+    app: params.app,
+    windowId: params.windowId,
+    surface,
+    maxDepth: params.maxDepth,
+    includeBounds: windowRead,
+    skeleton: windowRead,
+    timeoutMs: params.timeoutMs,
+  });
 }
 
 function runOptions(params: ActInput, signal: AbortSignal | undefined): RunOptions {
@@ -115,7 +117,7 @@ async function observeSurface(
   signal: AbortSignal | undefined,
 ): Promise<Observation | { error: CuToolResult }> {
   const pinned = params.surface ?? null;
-  const first = await deps.runner.run(snapshotArgs(params, pinned), runOptions(params, signal));
+  const first = await deps.runner.run(actSnapshotArgs(params, pinned), runOptions(params, signal));
   if (!first.envelope.ok) {
     return {
       error: envelopeError(first.envelope, pinned ? `snapshot --surface ${pinned}` : "snapshot"),
@@ -127,23 +129,20 @@ async function observeSurface(
   const overlay = detectOverlay(data);
   if (!overlay) return { data, surface: null, autoSurface: false, notes: [] };
 
-  const second = await deps.runner.run(snapshotArgs(params, overlay.kind), runOptions(params, signal));
+  const second = await deps.runner.run(actSnapshotArgs(params, overlay.kind), runOptions(params, signal));
   if (!second.envelope.ok) {
     return {
       data,
       surface: null,
       autoSurface: false,
-      notes: [
-        `the open ${overlay.kind} Overlay Surface could not be read ` +
-          `(${second.envelope.error?.code ?? "error"}); observed the Window instead`,
-      ],
+      notes: [overlayUnreadableNote(overlay.kind, second.envelope.error?.code ?? "error")],
     };
   }
   return {
     data: (second.envelope.data ?? {}) as AdSnapshotData,
     surface: overlay.kind,
     autoSurface: true,
-    notes: [`observed the open ${overlay.kind} Overlay Surface instead of the Window behind it`],
+    notes: [overlaySwitchedNote(overlay.kind)],
   };
 }
 
@@ -220,16 +219,6 @@ async function executeStep(
 /* -------------------------------------------------------------------------- */
 /* Result shaping                                                              */
 /* -------------------------------------------------------------------------- */
-
-function targetPayload(candidate: ActCandidate | null): ActDetails["target"] {
-  if (!candidate) return null;
-  return { ref: candidate.ref, role: candidate.role, name: candidate.name };
-}
-
-function targetLabel(candidate: ActCandidate): string {
-  const name = candidate.name ? ` "${candidate.name}"` : "";
-  return `${candidate.role}${name} (${candidate.ref})`;
-}
 
 function actResult(
   payload: Record<string, unknown>,
@@ -333,7 +322,7 @@ export function createActTool(deps: CuDeps): CuTool {
           evaluate: (request, callSignal) => deps.decision.evaluate(request, callSignal),
         });
       } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") throw error;
+        if (isAbortError(error, requestSignal)) throw error;
         const message = error instanceof Error ? error.message : String(error);
         return errorResult("DECISION_FAILED", `Jev System One request failed: ${message}`);
       }

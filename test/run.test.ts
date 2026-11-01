@@ -320,10 +320,10 @@ test("cu_run drills into a truncated Region and widens back to the Window", asyn
     "@s1:e6",
   ]);
   assert.deepEqual(
-    details.recent_actions.map((action: any) => [action.operation, action.delivery, action.changed]),
+    details.recent_actions.map((action: any) => [action.operation, action.delivery, action.changed, action.decision]),
     [
-      ["DRILL", "looked", true],
-      ["WIDEN", "looked", true],
+      ["DRILL", "looked", true, null],
+      ["WIDEN", "looked", true, null],
     ],
   );
   assert.equal(details.region_root, null);
@@ -570,7 +570,7 @@ test("cu_run treats WAIT as a look turn and re-observes", async () => {
   assert.equal(details.turns, 2);
   assert.equal(details.operations, 0);
   assert.deepEqual(details.recent_actions, [
-    { turn: 1, operation: "WAIT", target: null, decision: "act", delivery: "looked", changed: null },
+    { turn: 1, operation: "WAIT", target: null, decision: null, delivery: "looked", changed: null },
   ]);
   assert.equal(runner.argLists("snapshot").length, 2, "WAIT looks again");
 });
@@ -580,9 +580,18 @@ test("cu_run stops with blocked when the decision model reports the Goal blocked
   const decisionClient = new FakeDecisionClient(runStep("BLOCKED", null));
   const deps = makeDeps({ cli: runner, decision: decisionClient });
 
-  const result = await runGoal(deps, { goal: "change the system theme", app: "Preferences" });
+  const updates: any[] = [];
+  const result = await runTool(deps).execute(
+    "call-run",
+    { goal: "change the system theme", app: "Preferences" },
+    undefined,
+    (update: any) => updates.push(update),
+    makeContext(),
+  );
   const details = result.details as any;
 
+  assert.equal(updates[0].details.operation, "BLOCKED");
+  assert.equal(updates[0].details.decision, null);
   assert.equal(details.stop, "blocked");
   assert.equal(details.turns, 1);
   assert.equal(details.operations, 0);
@@ -688,20 +697,6 @@ test("cu_run stops at the 40-operation budget", async () => {
   assert.equal(result.isError, undefined);
 });
 
-test("cu_run stops at the 80-Jev-call budget", async () => {
-  const runner = new FakeCliRunner((args) => snapshotEnvelope(prefsTree));
-  const decisionClient = new FakeDecisionClient(runStep("WAIT", null));
-  const deps = makeDeps({ cli: runner, decision: decisionClient });
-
-  const result = await runGoal(deps, { goal: "wait for something to appear", app: "Preferences" });
-  const details = result.details as any;
-
-  assert.equal(details.stop, "budget: jev calls");
-  assert.equal(details.jev_calls, 80);
-  assert.equal(details.turns, 80);
-  assert.equal(details.operations, 0);
-});
-
 test("cu_run stops after 3 consecutive non-WAIT turns without a screen change", async () => {
   const runner = new FakeCliRunner((args) => (args[0] === "snapshot" ? snapshotEnvelope(prefsTree) : mutationEnvelope(args)));
   const decisionClient = new FakeDecisionClient(runStep("CLICK", "@s1:e1", { confidence: 0.93 }));
@@ -717,6 +712,47 @@ test("cu_run stops after 3 consecutive non-WAIT turns without a screen change", 
     details.recent_actions.map((action: any) => action.changed),
     [false, false, false],
   );
+});
+
+test("cu_run never issues a decision call past the budget for the risk rating", async () => {
+  const runner = new FakeCliRunner((args) => (args[0] === "snapshot" ? snapshotEnvelope(prefsTree) : mutationEnvelope(args)));
+  const decisionClient = new FakeDecisionClient();
+  decisionClient.queue(
+    runStep("CLICK", "@s1:e1", { confidence: 0.62 }),
+    riskAnswer(0.1),
+    runStep("CLICK", "@s1:e1", { confidence: 0.62 }),
+    riskAnswer(0.1),
+  );
+  const deps = makeDeps({ cli: runner, decision: decisionClient });
+
+  const result = await runGoal(deps, {
+    goal: "open the appearance settings",
+    app: "Preferences",
+    maxJevCalls: 3,
+  });
+  const details = result.details as any;
+
+  // Turn 1 spends call 1 (plan) + call 2 (risk). Turn 2 spends call 3 (plan) and
+  // must not spend a fourth call rating risk past the budget.
+  assert.equal(details.stop, "budget: jev calls");
+  assert.equal(details.jev_calls, 3);
+  assert.equal(decisionClient.requests.length, 3);
+  assert.equal(details.turns, 1);
+  assert.ok(details.notes.some((note: string) => /decision-call budget/.test(note)));
+});
+
+test("cu_run stops at the 80-Jev-call budget", async () => {
+  const runner = new FakeCliRunner((args) => snapshotEnvelope(prefsTree));
+  const decisionClient = new FakeDecisionClient(runStep("WAIT", null));
+  const deps = makeDeps({ cli: runner, decision: decisionClient });
+
+  const result = await runGoal(deps, { goal: "wait for something to appear", app: "Preferences" });
+  const details = result.details as any;
+
+  assert.equal(details.stop, "budget: jev calls");
+  assert.equal(details.jev_calls, 80);
+  assert.equal(details.turns, 80);
+  assert.equal(details.operations, 0);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -802,6 +838,7 @@ test("cu_run streams every completed turn through onUpdate", async () => {
   });
   assert.deepEqual(updates[1].details.changed, false);
   assert.equal(updates[2].details.operation, "DONE");
+  assert.equal(updates[2].details.decision, null);
   assert.equal(updates[2].details.stop, "done");
   assert.match(updates[0].content[0].text, /"operation":"CLICK"/);
 });
@@ -827,4 +864,24 @@ test("cu_run forwards the AbortSignal to the runner and the decision client", as
   assert.equal(runner.calls[0].options?.signal, controller.signal);
   assert.equal(signals.length, 1);
   assert.equal(signals[0], controller.signal);
+});
+
+test("cu_run lets a cancelled decision request abort instead of reporting DECISION_FAILED", async () => {
+  const runner = new FakeCliRunner((args) => snapshotEnvelope(prefsTree));
+  const decisionClient = new FakeDecisionClient(() => {
+    throw Object.assign(new Error("Request was aborted."), { name: "APIUserAbortError" });
+  });
+  const deps = makeDeps({ cli: runner, decision: decisionClient });
+  const controller = new AbortController();
+
+  await assert.rejects(
+    runTool(deps).execute(
+      "call-run",
+      { goal: "inspect the preferences", app: "Preferences" },
+      controller.signal,
+      undefined,
+      makeContext(),
+    ),
+    /aborted/i,
+  );
 });

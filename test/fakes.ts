@@ -22,6 +22,7 @@ import type {
   StateRootInfo,
 } from "../src/types.js";
 import { SdkDecisionClient } from "../src/jev/client.js";
+import { TypeSafeClient } from "@typesafe-ai/sdk";
 
 export function okEnvelope<T>(command: string, data: T): AdEnvelope<T> {
   return { version: "2.5", ok: true, command, data };
@@ -174,7 +175,8 @@ export class FakeDecisionClient implements DecisionClient {
     this.configured = options.configured ?? true;
     this.summary = {
       configured: this.configured,
-      baseURL: "https://api.typesafe.ai/v1/systemone",
+      baseURL: null,
+      endpoint: "https://api.typesafe.ai/v1/systemone",
       model: "jev-latest",
       keyOrigin: "$TYPESAFE_API_KEY",
       openrouter: false,
@@ -312,5 +314,27 @@ export function sdkClientWithTransport(
     readFile: () => null,
     sleep: options.sleep ?? (async () => {}),
     createClient: () => ({ systemOne }),
+  });
+}
+
+/**
+ * A real `SdkDecisionClient` driving the real SDK against a stubbed `fetch`, so
+ * tests can observe the request URL the SDK actually builds.
+ */
+export function sdkClientWithFetch(
+  fetchImpl: typeof fetch,
+  options: { env?: NodeJS.ProcessEnv } = {},
+): SdkDecisionClient {
+  return new SdkDecisionClient({
+    env: { TYPESAFE_API_KEY: "test-key", ...options.env },
+    homedir: "/home/fake",
+    readFile: () => null,
+    createClient: (config) =>
+      new TypeSafeClient({
+        apiKey: config.apiKey ?? "",
+        ...(config.baseURL === null ? {} : { baseURL: config.baseURL }),
+        defaultModel: config.model,
+        fetch: fetchImpl,
+      }) as unknown as { systemOne: (request: any, options?: any) => Promise<any> },
   });
 }

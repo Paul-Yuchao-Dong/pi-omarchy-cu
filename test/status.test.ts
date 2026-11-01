@@ -98,7 +98,8 @@ test("cu_status reports binary, private state root, AT-SPI readiness, Jev config
   assert.equal(report.atspi.permissions.accessibility.state, "granted");
   assert.equal(report.atspi.error, null);
   assert.equal(report.jev.configured, true);
-  assert.equal(report.jev.baseURL, "https://api.typesafe.ai/v1/systemone");
+  assert.equal(report.jev.baseURL, null);
+  assert.equal(report.jev.endpoint, "https://api.typesafe.ai/v1/systemone");
   assert.equal(report.jev.model, "jev-latest");
   assert.equal(report.jev.keyOrigin, "$TYPESAFE_API_KEY");
   assert.equal(report.apps.ok, true);

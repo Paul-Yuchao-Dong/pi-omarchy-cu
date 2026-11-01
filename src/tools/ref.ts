@@ -158,15 +158,16 @@ export function createRefTool(deps: CuDeps): CuTool {
       params: RefInput,
       signal: AbortSignal | undefined,
       _onUpdate: ((update: CuOnUpdate) => void) | undefined,
-      _ctx: CuContext,
+      ctx: CuContext,
     ) {
+      const requestSignal = signal ?? ctx?.signal;
       const action = params.action;
-      if (isRefOperation(action)) return runRefOperation(deps, action, params, signal);
+      if (isRefOperation(action)) return runRefOperation(deps, action, params, requestSignal);
 
       switch (action) {
         case "wait": {
           const run = await deps.runner.run(buildWaitArgs(params), {
-            signal,
+            signal: requestSignal,
             timeoutMs: waitSubprocessTimeoutMs(params),
           });
           return envelopeOutcome(run.envelope, "wait");
@@ -180,7 +181,7 @@ export function createRefTool(deps: CuDeps): CuTool {
               "clipboard-set requires `text`: the string to place on the Wayland clipboard.",
             );
           }
-          const run = await deps.runner.run(buildClipboardArgs(action, params), commandOptions(params, signal));
+          const run = await deps.runner.run(buildClipboardArgs(action, params), commandOptions(params, requestSignal));
           return envelopeOutcome(run.envelope, action);
         }
         case "launch": {
@@ -190,7 +191,7 @@ export function createRefTool(deps: CuDeps): CuTool {
               "launch requires `app`: the executable or desktop application to start.",
             );
           }
-          const run = await deps.runner.run(buildLaunchArgs(params.app, params), commandOptions(params, signal));
+          const run = await deps.runner.run(buildLaunchArgs(params.app, params), commandOptions(params, requestSignal));
           return envelopeOutcome(run.envelope, "launch");
         }
         default:

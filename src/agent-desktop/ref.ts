@@ -7,6 +7,7 @@
  */
 
 import { ACT_OPERATIONS, TEXT_OPERATIONS } from "../policy/operations.js";
+import { narrowingArgs } from "../tools/snapshot-args.js";
 import type { ActOperation, AdDisposition, AdEnvelope } from "../types.js";
 import type { RefInput } from "../tools/schemas.js";
 
@@ -49,13 +50,6 @@ export function setValueHyprlandDiagnostic(action: string, code: string): string
 }
 
 type NarrowingInput = Pick<RefInput, "app" | "windowId">;
-
-function narrowingArgs(input: NarrowingInput): string[] {
-  const args: string[] = [];
-  if (input.app) args.push("--app", input.app);
-  if (input.windowId) args.push("--window-id", input.windowId);
-  return args;
-}
 
 /** `select <ref> <option>`, `set-value <ref> <value>`, every other Operation `<command> <ref>`. */
 export function buildRefArgs(action: ActOperation, ref: string, input: RefInput): string[] {

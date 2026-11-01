@@ -23,6 +23,11 @@ import type {
   QuestionSpec,
   RouteDecision,
 } from "../types.js";
+import {
+  nodeIdentity,
+  windowState,
+  type ActWindow,
+} from "./shared.js";
 
 /** A first-pass target confidence below this triggers the richer top-5 rerank. */
 export const RERANK_CONFIDENCE_BAR = 0.7;
@@ -79,9 +84,7 @@ export function toActCandidate(
   options: { rich?: boolean; values?: boolean } = {},
 ): ActCandidate {
   return {
-    ref: String(walked.node.ref_id ?? ""),
-    role: String(walked.node.role ?? "element"),
-    name: String(walked.node.name ?? walked.node.title ?? ""),
+    ...nodeIdentity(walked.node),
     description: describeCandidate(walked, options),
     advertised: nodeActions(walked.node),
     walked,
@@ -105,12 +108,6 @@ export function collectActCandidates(
 /* -------------------------------------------------------------------------- */
 /* Request state and questions                                                 */
 /* -------------------------------------------------------------------------- */
-
-export interface ActWindow {
-  app?: string | null;
-  id?: string | null;
-  title?: string | null;
-}
 
 export interface ActStateInput {
   intent: string;
@@ -138,13 +135,9 @@ export const OPERATION_DESCRIPTIONS: Record<ActOperation, string> = {
 
 /** The structured `state` sent to System One. Never includes caller text or live values. */
 export function actState(input: ActStateInput): Record<string, unknown> {
-  const window: Record<string, unknown> = {};
-  if (input.window.app) window.app = input.window.app;
-  if (input.window.id) window.id = input.window.id;
-  if (input.window.title) window.title = input.window.title;
   return {
     intent: input.intent,
-    window,
+    window: windowState(input.window),
     ...(input.surface ? { surface: input.surface } : {}),
     text_supplied: input.textSupplied,
     candidates: input.candidates.map((candidate) => ({

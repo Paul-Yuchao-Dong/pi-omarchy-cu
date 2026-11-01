@@ -11,12 +11,7 @@
  * Route Decision.
  */
 
-import {
-  collectCandidates,
-  screenFingerprint,
-  truncatedRegions,
-  type WalkedNode,
-} from "../desktop/tree.js";
+import { collectCandidates, truncatedRegions, type WalkedNode } from "../desktop/tree.js";
 import {
   RUN_ELEMENT_OPERATIONS,
   RUN_TERMINAL_OPERATIONS,
@@ -35,11 +30,20 @@ import type {
   AdSnapshotData,
   DecisionRequest,
   DecisionResponse,
+  DeliveryDisposition,
   QuestionSpec,
   RouteDecision,
   RunOperation,
 } from "../types.js";
-import { describeCandidate, TARGET_NONE, type ActWindow } from "./act.js";
+import { describeCandidate, TARGET_NONE } from "./act.js";
+import {
+  nodeIdentity,
+  targetLabel,
+  targetPayload,
+  windowState,
+  type ActWindow,
+  type NodeIdentity,
+} from "./shared.js";
 
 /** Default Operation budget for one Goal. */
 export const DEFAULT_MAX_OPERATIONS = 40;
@@ -100,19 +104,14 @@ export function isElementOperation(operation: RunOperation): boolean {
 /* -------------------------------------------------------------------------- */
 
 /** One offered target: an element Ref or the whole-Window `WIDEN` target. */
-export interface RunTarget {
-  ref: string;
-  role: string;
-  name: string;
+export interface RunTarget extends NodeIdentity {
   description: string;
   node: AdNode;
 }
 
 function toRunTarget(walked: WalkedNode, values?: boolean): RunTarget {
   return {
-    ref: String(walked.node.ref_id ?? ""),
-    role: String(walked.node.role ?? "element"),
-    name: String(walked.node.name ?? walked.node.title ?? ""),
+    ...nodeIdentity(walked.node),
     description: describeCandidate(walked, { rich: true, values }),
     node: walked.node,
   };
@@ -214,8 +213,9 @@ export interface RunRecentAction {
   target: { ref: string; role: string; name: string } | null;
   /** Caller-supplied string consumed by TYPE_TEXT or SELECT. */
   text?: string;
-  decision: RouteDecision;
-  delivery: string | null;
+  /** `null` for a turn that never reached a Route Decision (DRILL, WIDEN, WAIT, DONE, BLOCKED). */
+  decision: RouteDecision | null;
+  delivery: DeliveryDisposition | null;
   changed: boolean | null;
   confirmedByUser?: boolean;
 }
@@ -229,14 +229,6 @@ export interface RunStateInput {
   textSupplied: boolean;
   candidates: readonly RunTarget[];
   recent: readonly RunRecentAction[];
-}
-
-function windowState(window: ActWindow): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  if (window.app) out.app = window.app;
-  if (window.id) out.id = window.id;
-  if (window.title) out.title = window.title;
-  return out;
 }
 
 /** The structured `state` sent to System One. Never includes caller text or live values. */
@@ -420,8 +412,8 @@ export type ObserveOutcome =
   | { ok: false; stop: string; code?: string; message?: string };
 
 export type MutationOutcome =
-  | { ok: true; delivery: string }
-  | { ok: false; delivery: string; code: string; message: string };
+  | { ok: true; delivery: DeliveryDisposition }
+  | { ok: false; delivery: DeliveryDisposition; code: string; message: string };
 
 export interface ConfirmRequest {
   operation: RunOperation;
@@ -457,8 +449,9 @@ export interface RunTurn {
   turn: number;
   operation: RunOperation | null;
   target: { ref: string; role: string; name: string } | null;
-  decision: RouteDecision;
-  delivery: string | null;
+  /** `null` when the turn never reached a Route Decision: only routed, mutating intent steps have one. */
+  decision: RouteDecision | null;
+  delivery: DeliveryDisposition | null;
   changed: boolean | null;
   stop?: string;
   confirmedByUser?: boolean;
@@ -495,15 +488,6 @@ export interface GoalLoopResult {
   root: string | null;
   window: ActWindow;
   secrets: readonly string[];
-}
-
-function targetPayload(target: RunTarget | null): { ref: string; role: string; name: string } | null {
-  return target ? { ref: target.ref, role: target.role, name: target.name } : null;
-}
-
-export function targetLabel(target: RunTarget): string {
-  const name = target.name ? ` "${target.name}"` : "";
-  return `${target.role}${name} (${target.ref})`;
 }
 
 function windowFrom(data: AdSnapshotData, fallback: ActWindow): ActWindow {
@@ -610,7 +594,7 @@ export async function runGoalLoop(
     if (!validation.ok) {
       addNote(validation.problem);
       complete(
-        { operation: null, target: null, decision: "abstain", delivery: null, changed: null },
+        { operation: null, target: null, decision: null, delivery: null, changed: null },
         `abstain: ${validation.problem}`,
       );
       return result(`abstain: ${validation.problem}`);
@@ -620,12 +604,12 @@ export async function runGoalLoop(
     const target = targetPayload(answers.target);
 
     if (operation === "DONE") {
-      complete({ operation, target: null, decision: "act", delivery: null, changed: null }, "done");
+      complete({ operation, target: null, decision: null, delivery: null, changed: null }, "done");
       return result("done");
     }
     if (operation === "BLOCKED") {
       addNote("the decision model reported the Goal as blocked on the current screen");
-      complete({ operation, target: null, decision: "act", delivery: null, changed: null }, "blocked");
+      complete({ operation, target: null, decision: null, delivery: null, changed: null }, "blocked");
       return result("blocked");
     }
 
@@ -637,6 +621,10 @@ export async function runGoalLoop(
         confirmDestructive: input.confirmDestructive === true,
       });
     if (riskWanted) {
+      if (jevCalls >= limits.jevCalls) {
+        addNote("the decision-call budget was spent before the destructive risk rating; stopping");
+        return result("budget: jev calls");
+      }
       const risk = await deps.evaluate(
         {
           state: riskState({
@@ -660,7 +648,9 @@ export async function runGoalLoop(
       }
     }
 
-    let decision: RouteDecision = "act";
+    // Only a routed element Operation has a Route Decision; the view and
+    // terminal Operations below leave it `null`.
+    let decision: RouteDecision | null = null;
     let confirmedByUser = false;
     if (isElementOperation(operation)) {
       const route = decideRoute({

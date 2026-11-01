@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createObserveTool } from "../src/tools/observe.js";
+import { createCuTools } from "../src/extension.js";
 import type { AdEnvelope, CuContentBlock, CuToolResult } from "../src/types.js";
 import { errEnvelope, FakeCliRunner, makeContext, makeDeps, okEnvelope } from "./fakes.js";
 
@@ -34,7 +34,8 @@ function cliWith(...envelopes: AdEnvelope[]): FakeCliRunner {
 }
 
 function observe(cli: FakeCliRunner) {
-  const tool = createObserveTool(makeDeps({ cli }));
+  const tool = createCuTools(makeDeps({ cli })).find((candidate) => candidate.name === "cu_observe");
+  assert.ok(tool, "cu_observe must be registered");
   return (params: Record<string, unknown>): Promise<CuToolResult> =>
     tool.execute("call-1", params, undefined, undefined, makeContext());
 }
@@ -367,7 +368,8 @@ test("observe caps a wide snapshot for the model context", async () => {
 test("observe forwards the AbortSignal to agent-desktop", async () => {
   const cli = new FakeCliRunner(() => snapshotEnvelope());
   const controller = new AbortController();
-  const tool = createObserveTool(makeDeps({ cli }));
+  const tool = createCuTools(makeDeps({ cli })).find((candidate) => candidate.name === "cu_observe");
+  assert.ok(tool, "cu_observe must be registered");
 
   await tool.execute("call-1", { action: "find", role: "button" }, controller.signal, undefined, makeContext());
 

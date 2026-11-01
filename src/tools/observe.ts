@@ -1,6 +1,7 @@
 import type { AdListSurfacesData, AdSnapshotData, CliRunOptions, CuDeps, CuToolResult } from "../types.js";
 import { detectOverlay, findNodeByRef, snapshotWindowId, truncatedRegions, type OverlayKind } from "../desktop/tree.js";
 import { ObserveParams, type ObserveInput } from "./schemas.js";
+import { narrowingArgs, snapshotArgs } from "./snapshot-args.js";
 import { envelopeError, errorResult, jsonResult, type CuTool } from "./shared.js";
 
 export const OBSERVE_DESCRIPTION =
@@ -31,13 +32,6 @@ export interface ObserveDetails {
 
 type ObserveAction = NonNullable<ObserveInput["action"]>;
 
-function identifierArgs(params: ObserveInput): string[] {
-  const args: string[] = [];
-  if (params.app) args.push("--app", params.app);
-  if (params.windowId) args.push("--window-id", params.windowId);
-  return args;
-}
-
 function timeoutArgs(params: ObserveInput): string[] {
   return params.timeoutMs === undefined ? [] : ["--timeout-ms", String(params.timeoutMs)];
 }
@@ -57,31 +51,27 @@ function hasDefaultDepth(params: ObserveInput): boolean {
  * explicit `root` or `maxDepth` replaces that default so the Region can be read
  * in detail. The automatic Overlay Surface re-read (`mode: "surface"`) passes
  * `-i` alone: agent-desktop forbids `--skeleton` on a surface and popup trees
- * are already small.
+ * are already small. `snapshot-args.ts` owns the flag order and the surface rule.
  */
-function snapshotArgs(
+function callerSnapshotArgs(
   params: ObserveInput,
   surfaceKind: OverlayKind | string | null,
   mode: "caller" | "surface",
 ): string[] {
-  const args = ["snapshot", ...identifierArgs(params)];
   const surfaceRead = mode === "surface";
-  if (params.interactiveOnly !== false) args.push("-i");
-  if (params.compact === true || (params.compact === undefined && !surfaceRead)) args.push("--compact");
-  if (
-    params.includeBounds === true ||
-    (params.includeBounds === undefined && !surfaceRead && hasDefaultDepth(params))
-  ) {
-    args.push("--include-bounds");
-  }
-  if (!surfaceRead && (params.skeleton === true || (params.skeleton === undefined && hasDefaultDepth(params)))) {
-    args.push("--skeleton");
-  }
-  if (surfaceKind) args.push("--surface", surfaceKind);
-  if (params.root) args.push("--root", params.root);
-  if (params.maxDepth !== undefined) args.push("--max-depth", String(params.maxDepth));
-  args.push(...timeoutArgs(params));
-  return args;
+  return snapshotArgs({
+    app: params.app,
+    windowId: params.windowId,
+    surface: surfaceKind,
+    root: params.root ?? null,
+    maxDepth: params.maxDepth,
+    interactiveOnly: params.interactiveOnly !== false,
+    compact: !surfaceRead && (params.compact === true || params.compact === undefined),
+    includeBounds:
+      !surfaceRead && (params.includeBounds === true || (params.includeBounds === undefined && hasDefaultDepth(params))),
+    skeleton: !surfaceRead && (params.skeleton === true || (params.skeleton === undefined && hasDefaultDepth(params))),
+    timeoutMs: params.timeoutMs,
+  });
 }
 
 /**
@@ -90,10 +80,15 @@ function snapshotArgs(
  * probe mirrors that filter.
  */
 function containmentProbeArgs(params: ObserveInput): string[] {
-  const args = ["snapshot", ...identifierArgs(params)];
-  if (params.interactiveOnly !== false) args.push("-i");
-  args.push("--compact", ...timeoutArgs(params));
-  return args;
+  return snapshotArgs({
+    app: params.app,
+    windowId: params.windowId,
+    interactiveOnly: params.interactiveOnly !== false,
+    compact: true,
+    includeBounds: false,
+    skeleton: false,
+    timeoutMs: params.timeoutMs,
+  });
 }
 
 function rootOutsideWindow(params: ObserveInput, actualWindowId: string | null): CuToolResult {
@@ -194,7 +189,7 @@ async function readSnapshot(
   mode: "caller" | "surface",
   signal: AbortSignal | undefined,
 ): Promise<{ data: AdSnapshotData } | { error: CuToolResult }> {
-  const args = snapshotArgs(params, surfaceKind, mode);
+  const args = callerSnapshotArgs(params, surfaceKind, mode);
   const call = await deps.runner.run(args, runOptions(params, signal));
   if (!call.envelope.ok) {
     return { error: envelopeError(call.envelope, surfaceKind ? `snapshot --surface ${surfaceKind}` : "snapshot") };
@@ -274,7 +269,7 @@ function stateTokens(state: string | string[] | undefined): string[] {
 }
 
 function findArgs(params: ObserveInput): string[] {
-  const args = ["find", ...identifierArgs(params)];
+  const args = ["find", ...narrowingArgs(params)];
   if (params.root) args.push("--root", params.root);
   if (params.surface) args.push("--surface", params.surface);
   if (params.role !== undefined) args.push("--role", params.role);
@@ -337,7 +332,7 @@ async function observeGetOrIs(
     });
   }
 
-  const args = [action, params.ref, ...identifierArgs(params)];
+  const args = [action, params.ref, ...narrowingArgs(params)];
   if (params.property) args.push("--property", params.property);
   args.push(...timeoutArgs(params));
 
@@ -372,7 +367,7 @@ async function observeListSurfaces(
   params: ObserveInput,
   signal: AbortSignal | undefined,
 ): Promise<CuToolResult> {
-  const args = ["list-surfaces", ...identifierArgs(params), ...timeoutArgs(params)];
+  const args = ["list-surfaces", ...narrowingArgs(params), ...timeoutArgs(params)];
   const call = await deps.runner.run(args, runOptions(params, signal));
   if (!call.envelope.ok) return envelopeError(call.envelope, "list-surfaces");
 

@@ -12,14 +12,21 @@
  * - model: explicit -> `PI_JEV_MODEL` -> `TYPESAFE_MODEL` ->
  *   `TYPESAFE_DEFAULT_MODEL` -> `~typesafe/jev-latest` on OpenRouter
  *   (bare names are scoped) or `jev-latest` on TypeSafe.
+ *
+ * `@typesafe-ai/sdk` appends `/v1/systemone` to its `baseURL`, so an explicit
+ * endpoint is reduced to its root before it reaches the SDK and the effective
+ * request endpoint is reported separately.
  */
 
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-export const TYPESAFE_DEFAULT_BASE_URL = "https://api.typesafe.ai/v1/systemone";
-export const OPENROUTER_DEFAULT_BASE_URL = "https://openrouter.ai/api";
+export const TYPESAFE_DEFAULT_ROOT = "https://api.typesafe.ai";
+export const OPENROUTER_DEFAULT_ROOT = "https://openrouter.ai/api";
+export const SYSTEM_ONE_PATH = "/v1/systemone";
+/** The request endpoint the SDK builds for the TypeSafe default root. */
+export const TYPESAFE_DEFAULT_ENDPOINT = `${TYPESAFE_DEFAULT_ROOT}${SYSTEM_ONE_PATH}`;
 export const OPENROUTER_DEFAULT_MODEL = "~typesafe/jev-latest";
 export const TYPESAFE_DEFAULT_MODEL = "jev-latest";
 
@@ -32,7 +39,10 @@ export interface ResolvedKey {
 }
 
 export interface JevConfig {
+  /** SDK API root; `null` leaves the TypeSafe default root to the SDK. */
   baseURL: string | null;
+  /** The effective `/v1/systemone` request endpoint, safe to report to the model. */
+  endpoint: string;
   apiKey: string | null;
   keyOrigin: string | null;
   model: string;
@@ -143,6 +153,21 @@ function scopeOpenRouterModel(model: string): string {
   return `~typesafe/${model}`;
 }
 
+/**
+ * Reduce an explicit endpoint to the API root the SDK expects.
+ *
+ * Both `https://api.typesafe.ai` and `https://api.typesafe.ai/v1/systemone` are
+ * accepted, so a value copied from TypeSafe's docs cannot produce a doubled
+ * `.../v1/systemone/v1/systemone` request path.
+ */
+export function systemOneRoot(endpoint: string): string {
+  const trimmed = endpoint.trim().replace(/\/+$/, "");
+  const withoutPath = trimmed.endsWith(SYSTEM_ONE_PATH)
+    ? trimmed.slice(0, -SYSTEM_ONE_PATH.length)
+    : trimmed;
+  return withoutPath.replace(/\/+$/, "");
+}
+
 export function resolveJevConfig(options: ResolveJevConfigOptions = {}): JevConfig {
   const env = options.env ?? process.env;
   const explicitBase = envValue(env, "PI_JEV_BASE_URL") ?? envValue(env, "TYPESAFE_BASE_URL");
@@ -159,17 +184,17 @@ export function resolveJevConfig(options: ResolveJevConfigOptions = {}): JevConf
   const openrouter = openrouterEndpoint;
 
   let problem: string | null = null;
-  let baseURL: string | null = explicitBase ?? null;
+  let baseURL: string | null = null; // SDK root; null means "the SDK's TypeSafe default"
 
-  if (baseURL) {
-    const validation = validateEndpoint(baseURL);
-    if (!validation.ok) {
-      problem = validation.problem;
-      baseURL = null;
-    }
-  } else {
-    baseURL = openrouter ? OPENROUTER_DEFAULT_BASE_URL : TYPESAFE_DEFAULT_BASE_URL;
+  if (explicitBase) {
+    const validation = validateEndpoint(explicitBase);
+    if (validation.ok) baseURL = systemOneRoot(explicitBase);
+    else problem = validation.problem;
+  } else if (openrouter) {
+    baseURL = OPENROUTER_DEFAULT_ROOT;
   }
+
+  const endpoint = baseURL === null ? TYPESAFE_DEFAULT_ENDPOINT : `${baseURL}${SYSTEM_ONE_PATH}`;
 
   const explicitModel = options.model?.trim();
   const modelEnv =
@@ -183,17 +208,19 @@ export function resolveJevConfig(options: ResolveJevConfigOptions = {}): JevConf
   const loopbackEndpoint = baseURL ? isLoopbackHost(new URL(baseURL).hostname) : false;
   const apiKey = key?.key ?? (explicitBase && loopbackEndpoint && !openrouter ? "" : null);
 
-  if (!apiKey && apiKey !== "") {
+  if (apiKey === null) {
     problem = problem ?? "No Jev API key found (TYPESAFE_API_KEY, OPENROUTER_API_KEY, or a pi secret file).";
   }
 
   return {
     baseURL,
+    endpoint,
     apiKey,
     keyOrigin: key?.origin ?? null,
     model,
     openrouter,
-    configured: Boolean(apiKey) && Boolean(baseURL) && problem === null,
+    // A keyless loopback endpoint is configured: the empty key is deliberate.
+    configured: apiKey !== null && problem === null,
     problem,
   };
 }

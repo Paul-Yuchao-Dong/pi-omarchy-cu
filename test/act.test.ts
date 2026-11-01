@@ -724,3 +724,23 @@ test("cu_act forwards the AbortSignal to the runner and the decision client", as
   assert.equal(signals.length, 1);
   assert.equal(signals[0], controller.signal);
 });
+
+test("cu_act lets a cancelled decision request abort instead of reporting DECISION_FAILED", async () => {
+  const runner = new FakeCliRunner(() => snapshotEnvelope(notesTree));
+  const decisionClient = new FakeDecisionClient(() => {
+    throw Object.assign(new Error("Request was aborted."), { name: "APIUserAbortError" });
+  });
+  const deps = makeDeps({ cli: runner, decision: decisionClient });
+  const controller = new AbortController();
+
+  await assert.rejects(
+    actTool(deps).execute(
+      "call-1",
+      { intent: "press the List View button", app: "Notes" },
+      controller.signal,
+      undefined,
+      makeContext(),
+    ),
+    /aborted/i,
+  );
+});
