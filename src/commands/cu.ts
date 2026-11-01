@@ -4,7 +4,7 @@
  * Supported: `/cu status`, `/cu apps`, `/cu windows`.
  */
 
-import type { CliRunner, CuToolResult } from "../types.js";
+import type { AdError, CliRunner, CuToolResult } from "../types.js";
 import { formatForModel } from "../tools/shared.js";
 
 export const CU_USAGE = "Usage: /cu status | /cu apps | /cu windows";
@@ -19,6 +19,16 @@ export interface CuCommandResult {
   isError?: boolean;
 }
 
+function commandFailure(command: string, error: AdError | undefined): CuCommandResult {
+  const code = error?.code ?? "AGENT_DESKTOP_ERROR";
+  const message = error?.message ?? `${command} failed`;
+  const suggestion = error?.suggestion ? ` Suggestion: ${error.suggestion}` : "";
+  return {
+    text: `agent-desktop ${command} failed: ${code} ${message}${suggestion}`.trim(),
+    isError: true,
+  };
+}
+
 export async function runCuCommand(args: string, deps: CuCommandDeps): Promise<CuCommandResult> {
   const sub = args.trim().split(/\s+/)[0] ?? "";
   switch (sub) {
@@ -29,22 +39,12 @@ export async function runCuCommand(args: string, deps: CuCommandDeps): Promise<C
     }
     case "apps": {
       const result = await deps.runner.run(["list-apps"]);
-      if (!result.envelope.ok) {
-        return {
-          text: `agent-desktop list-apps failed: ${result.envelope.error?.code ?? "ERROR"} ${result.envelope.error?.message ?? ""}`.trim(),
-          isError: true,
-        };
-      }
+      if (!result.envelope.ok) return commandFailure("list-apps", result.envelope.error);
       return { text: formatForModel(result.envelope.data ?? {}, 6000) };
     }
     case "windows": {
       const result = await deps.runner.run(["list-windows"]);
-      if (!result.envelope.ok) {
-        return {
-          text: `agent-desktop list-windows failed: ${result.envelope.error?.code ?? "ERROR"} ${result.envelope.error?.message ?? ""}`.trim(),
-          isError: true,
-        };
-      }
+      if (!result.envelope.ok) return commandFailure("list-windows", result.envelope.error);
       return { text: formatForModel(result.envelope.data ?? {}, 6000) };
     }
     default:
