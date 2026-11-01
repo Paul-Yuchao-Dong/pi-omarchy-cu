@@ -267,15 +267,17 @@ test("runner parses an envelope from stdout or stderr and rejects junk", () => {
   assert.equal(parseEnvelope("not json at all"), null);
 });
 
-test("real runner resolves the probe binary and enforces a 0700 state root", async () => {
+test("bundled runner resolves the package binary and enforces a 0700 state root", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "cu-root-"));
   const runner = new AgentDesktopCliRunner({
     env: { ...process.env, AGENT_DESKTOP_HOME: path.join(root, "state"), PATH: "/nonexistent" },
     homedir: root,
-    probePath: "/tmp/ad-probe/node_modules/.bin/agent-desktop",
+    probePath: path.join(root, "missing-probe", "agent-desktop"),
+    pathLookup: () => null,
   });
   const resolution = runner.resolve();
-  assert.ok(resolution, "expected agent-desktop to resolve from the probe path");
+  assert.ok(resolution, "expected the bundled agent-desktop dependency to resolve");
+  assert.equal(resolution.source, "package");
   const info = await runner.ensureStateRoot();
   assert.equal(info.mode, 0o700);
   assert.equal(statSync(info.path).mode & 0o777, 0o700);
