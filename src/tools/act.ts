@@ -72,12 +72,18 @@ type RunOptions = { signal?: AbortSignal; timeoutMs?: number };
 /* Observation                                                                 */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * `snapshot` arguments. The Window read keeps the shallow skeleton overview;
+ * a surface read passes `-i` alone because agent-desktop forbids `--skeleton`
+ * on a surface and popup trees are already small.
+ */
 function snapshotArgs(params: ActInput, surface: string | null): string[] {
   const args = ["snapshot"];
   if (params.app) args.push("--app", params.app);
   if (params.windowId) args.push("--window-id", params.windowId);
-  args.push("-i", "--compact", "--include-bounds", "--skeleton");
+  args.push("-i");
   if (surface) args.push("--surface", surface);
+  else args.push("--compact", "--include-bounds", "--skeleton");
   if (params.maxDepth !== undefined) args.push("--max-depth", String(params.maxDepth));
   if (params.timeoutMs !== undefined) args.push("--timeout-ms", String(params.timeoutMs));
   return args;
