@@ -253,6 +253,7 @@ function resolutionPayload(
     target: targetPayload(step.target),
     operation: step.operation,
     reconciled: step.reconciled,
+    reconciled_note: step.reconciledNote,
     reranked: step.reranked,
     confidence: step.confidence,
     present: step.present,
@@ -262,7 +263,6 @@ function resolutionPayload(
     executed: false,
     notes,
   };
-  if (step.reconciledNote) payload.reconciled_note = step.reconciledNote;
   if (collection.truncated > 0) payload.truncated = collection.truncated;
   return payload;
 }

@@ -130,6 +130,7 @@ test("cu_act executes a high-confidence click with the exact mutating CLI args",
   assert.deepEqual(details.target, { ref: "@s1:e1", role: "button", name: "List View" });
   assert.equal(details.operation, "click");
   assert.equal(details.executed, true);
+  assert.equal(details.reconciled_note, null);
   assert.equal(details.delivery, "delivered_verified");
   assert.deepEqual(details.post_state, { value: "post" });
   assert.deepEqual(details.steps, [{ action: "click", ref: "@s1:e1" }]);
