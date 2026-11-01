@@ -1,53 +1,165 @@
 # pi-omarchy-cu
 
-Semantic desktop observation and goal-driven interaction for Linux applications
-from the [Pi](https://github.com/badlogic/pi) coding agent, on Omarchy (Hyprland
-Wayland), over AT-SPI, with in-process TypeSafe Jev System One decisions.
+**Computer use for the [Pi](https://github.com/earendil-works/pi) coding agent on Linux, built for Omarchy (Hyprland Wayland).**
 
-The accessibility tree never enters the agent's context: each tool call reads
-the live **Window** or **Overlay Surface**, filters nodes by their **Advertised
-Actions**, asks Jev for the target **Ref** and **Operation**, enforces
-deterministic confidence and risk thresholds, and returns compact evidence about
-what happened.
+`pi-omarchy-cu` lets Pi drive real desktop applications through the AT-SPI
+accessibility tree, while a calibrated decision model picks the target and the
+action. The accessibility tree never enters Pi's context: a tool call reads the
+live **Window** or **Overlay Surface**, filters nodes by their **Advertised
+Actions**, asks **Jev System One** for the target **Ref** and **Operation**,
+enforces deterministic confidence and risk thresholds, and returns compact
+evidence about what happened.
+
+```
+"switch to list view"                       → cu_act   (one step, dry-run by default)
+"open Preferences, then enable Dark Mode"   → cu_run   (multi-step Goal, verifies as it goes)
+"click @s8f3k2p9:e12"                       → cu_ref   (you already know the Ref)
+"what is on the screen?"                    → cu_observe
+"why is Chromium invisible?"                → cu_status
+```
+
+## What it can do
+
+| Capability | Tool |
+| --- | --- |
+| **Readiness report** — agent-desktop binary, private state root, AT-SPI bus, display, Jev config, apps, windows, blind spots | `cu_status`, `/cu status` |
+| **Inspect** a Window, a Region, or the active dialog/menu — skeleton overview, drill into a Region, `find`/`get`/`is`/`list-surfaces` | `cu_observe` |
+| **Act deterministically** on a known Ref — `click`, `right-click`, `check`, `uncheck`, `toggle`, `expand`, `collapse`, `select`, `set-value`, `clear`, `scroll-to` — plus `wait`, clipboard, and accessibility-enabled `launch` | `cu_ref` |
+| **One natural-language Intent** — resolve the target and Operation without reading the tree, optionally execute | `cu_act` |
+| **A multi-step Goal** — observe → decide → confirm → act → verify, with budgets and stop conditions | `cu_run` |
+| **Dialogs and menus first** — an open sheet, alert, menu, or popover is observed instead of the window it covers | all read paths |
+| **Human-in-the-loop** — risky or ambiguous steps prompt with the window, operation, target, confidence, and destructive probability | `cu_act`, `cu_run` |
+| **Text entry without a keyboard** — semantic `set-value` on nodes that advertise it, with scoped redaction | `cu_act`, `cu_run`, `cu_ref` |
+| **Diagnostics at zero token cost** — `/cu apps`, `/cu windows` | `/cu` |
+
+It is deliberately conservative: only the 11 Wayland-safe AT-SPI Operations are
+offered, text entry is reconciled to `set-value` (never synthetic keystrokes),
+and confidence thresholds (`0.55` floor, `0.70` action bar, `0.90` destructive
+bar) gate every mutation. See [ADR-0002](docs/adr/0002-strict-at-spi-execution-on-hyprland.md).
+
+### What it cannot do (yet)
+
+- **Terminal/TUI apps** (cliamp, nvim, btop): their content never joins the
+  AT-SPI bus, and Hyprland Wayland blocks synthetic keystrokes. The extension
+  says so and stops; drive these through their own CLI/IPC (the bundled skill
+  shows the cliamp recipe).
+- **Apps that are not running**: `cu_ref` can launch them with the accessibility
+  environment injected, but `cu_act`/`cu_run` do not auto-launch today.
+- **Canvas/GPU-drawn UIs with no accessible nodes**: `cu_act` abstains instead of
+  guessing coordinates.
+- **Compositor-level input**: no `wtype`, `ydotool`, `hyprctl` input, or `grim`
+  screenshots (ADR-0002). For Chromium-only work, use
+  [surf](https://github.com/nicobailon/surf-cli).
+- **Other users' sessions, containers, or sandboxes that don't share the bus.**
 
 ## Install
 
+Requires Linux with a running AT-SPI bus (`at-spi2-core`), a graphical session,
+and Pi. `agent-desktop` ships as a dependency, so you do not install it
+separately.
+
 ```bash
-pi install /home/tuo/Projects/pi-omarchy-cu
+# from npm (once published)
+pi install npm:pi-omarchy-cu
+
+# from GitHub
+pi install git:github.com/Paul-Yuchao-Dong/pi-omarchy-cu
+
+# from a local checkout
+npm install
+pi install .
 ```
 
-The package declares its extension and skill in `package.json`
-(`"pi": { "extensions": ["./extensions/index.ts"], "skills": ["./skills"] }`).
+`pi install` reads the package manifest (`"pi": { "extensions":
+["./extensions/index.ts"], "skills": ["./skills"] }`) and loads both the tools
+and the `omarchy-cu` skill. A local checkout is not installed by Pi, which is why
+it needs its own `npm install` first.
 
-`agent-desktop` ships as a package dependency, so the binary is resolved from
-`AGENT_DESKTOP_BIN`, then the package-local `node_modules/.bin`, then `PATH`.
-A local checkout is not installed by `pi install`, so run `npm install` once in
-the package directory; npm and git installs get the dependency automatically.
-It also needs Jev credentials (below).
+To try it without touching your settings:
+
+```bash
+pi -e /path/to/pi-omarchy-cu
+```
+
+### Jev credentials
+
+`cu_act` and `cu_run` need a TypeSafe Jev endpoint. Resolution matches
+[`pi-jev`](https://github.com/TheoOliveira/pi-jev), so an existing setup works
+as-is:
+
+- **Endpoint:** `PI_JEV_BASE_URL` → `TYPESAFE_BASE_URL` → OpenRouter
+  (`https://openrouter.ai/api`, when an OpenRouter key is used) → TypeSafe
+  (`https://api.typesafe.ai/v1/systemone`).
+- **Key:** `$TYPESAFE_API_KEY` → `~/.pi/agent/secrets/typesafe_api_key` →
+  `$OPENROUTER_API_KEY` → `~/.pi/agent/secrets/openrouter_api_key`. A custom
+  loopback endpoint may run keyless.
+- **Model:** explicit → `PI_JEV_MODEL` → `TYPESAFE_MODEL` →
+  `TYPESAFE_DEFAULT_MODEL` → `~typesafe/jev-latest` on OpenRouter, `jev-latest`
+  on TypeSafe.
+
+HTTPS is required for remote endpoints; plain HTTP is accepted only on loopback,
+and URLs with embedded credentials are rejected. `cu_status` reports the
+resolved endpoint and key origin, never the key.
+
+### First run
+
+```bash
+/cu status            # binary, state root, bus, display, Jev, apps, blind spots
+/cu apps              # what is on the accessibility bus
+```
+
+Then, from the Pi prompt:
+
+```
+Call cu_status. If a running Chromium, Electron, or Qt app is missing from the
+accessibility bus, show me the exact flags to relaunch it.
+```
+
+## Usage
+
+### `cu_act` — one Intent
+
+```
+Call cu_act with intent "press the List View button" and execute: false.
+Show the chosen Ref, Operation, confidence, destructive risk, and why.
+```
+
+Dry run is the default. Pass `execute: true` to land the step. When the Intent
+needs text, pass `text` — the extension never invents strings. When several
+foreground apps exist, name the app (`app: "Notes"`); loose names and casing are
+resolved against `list-apps`.
+
+### `cu_run` — one Goal
+
+```
+Use cu_run with the goal "open Preferences, switch to Appearance, and enable
+Dark Mode" and confirmDestructive: true.
+```
+
+Every turn streams as a progress update. The loop stops on `done`, `blocked`, a
+declined confirmation, `action_failed`, `window_closed`, a window/surface
+ownership violation, 40 operations, 80 decision calls, or 3 consecutive non-WAIT
+turns with an unchanged SHA-1 screen fingerprint.
+
+### `cu_observe` and `cu_ref`
+
+Use these when you want explicit control: `cu_observe` to read a Window, Region,
+or the active dialog; `cu_ref` to run one deterministic operation, wait for a UI
+transition, read or write the Wayland clipboard, or launch an app with
+accessibility enabled.
 
 ## Tools
 
 | Tool | What it does |
 | --- | --- |
-| `cu_status` | Readiness: `agent-desktop` binary, private state root (`0700`), AT-SPI bus and display, Jev configuration, running apps and windows, plus AT-SPI blind spots (Chromium, Electron, and Qt processes that are missing from the bus, with the exact relaunch flags) and the Electron single-client bridge warning. |
-| `cu_observe` | Explicit inspection: `snapshot` (interactive-only, compact, bounds-included, shallow skeleton by default, auto-switching to an open Overlay Surface), `find`, `get`, `is`, `list-surfaces`. A `root` Ref or `maxDepth` narrows or deepens a Region read; a `windowId` pins every read to one Window and rejects a leaked Ref or Surface. |
-| `cu_ref` | Deterministic AT-SPI operations on a known Ref (`click`, `right-click`, `check`, `uncheck`, `toggle`, `expand`, `collapse`, `select`, `set-value`, `clear`, `scroll-to`), `wait`, `clipboard-get` / `clipboard-set` / `clipboard-clear` through `wl-clipboard`, and `launch` with accessibility environment variables injected. |
-| `cu_act` | One plain-language **Intent** (e.g. `"press the List View button"`): snapshot, candidate filtering, one five-question System One request, top-5 rerank below `0.70` target confidence, Operation reconciliation, Route Decision, optional `ctx.ui.confirm`, execution. Dry run by default. |
-| `cu_run` | A multi-step **Goal** (e.g. `"open Preferences and enable Dark Mode"`): loops observe → decide → confirm → act → verify, offering the Wayland-safe element Operations, `DRILL`/`WIDEN` Region navigation, and `WAIT`/`DONE`/`BLOCKED`, streaming every turn as a progress update. |
+| `cu_status` | Readiness: binary, private state root (`0700`), AT-SPI bus, display, Jev configuration, running apps and windows, AT-SPI blind spots with exact relaunch flags, and the Electron single-client bridge warning. |
+| `cu_observe` | `snapshot` (interactive-only, compact, bounds-included, shallow skeleton, auto-switching to an open Overlay Surface), `find`, `get`, `is`, `list-surfaces`. A `root` Ref or `maxDepth` narrows or deepens a Region read; a `windowId` pins every read to one Window and rejects leaked nodes. |
+| `cu_ref` | The 11 Wayland-safe Ref Operations, `wait`, `clipboard-get`/`clipboard-set`/`clipboard-clear` (via `wl-clipboard`), and `launch` with `ACCESSIBILITY_ENABLED=1` and `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1`. |
+| `cu_act` | One Intent: snapshot, candidate filtering, a five-question System One request, top-5 rerank below `0.70`, Operation reconciliation, Route Decision, confirmation, execution. |
+| `cu_run` | One Goal: the observe-decide-act-verify loop with DRILL/WIDEN Region navigation, streaming turns, and hard budgets. |
 
-`cu_run` stops on `done`, `blocked`, `confirm: ...` (declined or headless),
-`abstain: ...`, `error: action_failed | window_closed | root_outside_window |
-surface_outside_window`, `budget: operations` (40), `budget: jev calls` (80), or
-`unchanged: 3 turns` (three consecutive non-`WAIT` turns with an identical
-SHA-1 screen fingerprint).
-
-## `/cu` command
-
-Zero-token terminal diagnostics, outside the model's context:
-
-- `/cu status` — readiness summary, blind spots, and the Electron bridge warning.
-- `/cu apps` — applications currently on the AT-SPI bus.
-- `/cu windows` — Window identifiers and titles, ready to pass as `windowId`.
+`/cu status`, `/cu apps`, and `/cu windows` give the same diagnostics in the
+terminal, outside the model's context.
 
 ## Omarchy AT-SPI flags
 
@@ -61,33 +173,10 @@ the offending processes; this is what puts each toolkit on the bus:
 | Qt | `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1 <app>` (equivalently `QT_ACCESSIBILITY=1`) |
 | Electron | no accessibility flag; add `--no-sandbox` only where `chrome-sandbox` is not setuid |
 
-`cu_ref` with `action: "launch"` injects `ACCESSIBILITY_ENABLED=1` and
-`QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1` automatically. Relaunching an application
-loses its state, so ask the user first.
-
-Electron single-client bridge hazard: when `agent-desktop` is the only AT-SPI
-client, its disconnect can crash the Electron accessibility bridge (VS Code
-exits with SIGSEGV). A GNOME desktop keeps the shell connected; on Hyprland keep
-another AT-SPI client connected.
-
-## Application scoping and terminal apps
-
-`cu_act` and `cu_run` scope themselves: a loosely-named `app` is resolved
-against `list-apps` (casing and near-misses included), and with no `app` the
-only foreground application is used and reported in `notes`. Several
-foreground applications are never guessed — the error names them so the caller
-can pass `app` or `windowId`.
-
-Terminal/TUI apps (cliamp, nvim, btop) and apps with their own CLI/IPC belong on
-the shell side, not here: the extension reports them as undrivable and the
-companion skill shows the CLI recipe (for example
-`cliamp remote call provider.search` then `cliamp open 'cliamp://play?url=...'`).
-
-An application that never joined the AT-SPI bus gets a specific explanation:
-GUI toolkits get their relaunch flags, an app that is not running gets
-`cu_ref` launch guidance, and terminal/TUI applications (cliamp, nvim, btop)
-are reported as undrivable, because terminal content is not on the bus and
-Hyprland Wayland blocks synthetic keystrokes.
+Electron single-client hazard: when `agent-desktop` is the only AT-SPI client,
+its disconnect can crash the Electron accessibility bridge (VS Code exits with
+SIGSEGV). A GNOME desktop keeps the shell connected; on Hyprland keep another
+AT-SPI client connected.
 
 ## Environment variables
 
@@ -95,43 +184,60 @@ Hyprland Wayland blocks synthetic keystrokes.
 | --- | --- |
 | `AGENT_DESKTOP_BIN` | Explicit `agent-desktop` executable; overrides the bundled dependency. |
 | `AGENT_DESKTOP_HOME` | State directory; created and enforced at `0700`. |
-| `WAYLAND_DISPLAY`, `DISPLAY` | Passed through to `agent-desktop`. When unset (Herdr server, systemd, SSH, or container pane), the extension derives them from the newest `/run/user/<uid>/wayland-*` socket and the lowest `/tmp/.X11-unix/X<n>`; explicit values always win. |
-| `PI_JEV_BASE_URL`, `TYPESAFE_BASE_URL` | Jev endpoint, as an API root (`https://api.typesafe.ai`) or the full `.../v1/systemone` endpoint; both resolve to the same request URL. HTTPS is required for remote hosts; plain HTTP is allowed only on loopback, and URLs with embedded credentials are rejected. |
+| `WAYLAND_DISPLAY`, `DISPLAY` | Passed through to `agent-desktop`. When unset (Herdr server, systemd, SSH, or container pane), they are derived from the newest `/run/user/<uid>/wayland-*` socket and the lowest `/tmp/.X11-unix/X<n>`; explicit values always win. |
+| `PI_JEV_BASE_URL`, `TYPESAFE_BASE_URL` | Jev endpoint, as an API root (`https://api.typesafe.ai`) or the full `.../v1/systemone` endpoint; both resolve to the same request URL. |
 | `PI_JEV_MODEL`, `TYPESAFE_MODEL`, `TYPESAFE_DEFAULT_MODEL` | Decision model, resolved in that order. |
-| `TYPESAFE_API_KEY`, `OPENROUTER_API_KEY` | API keys. The `pi` secret files `~/.pi/agent/secrets/typesafe_api_key` and `~/.pi/agent/secrets/openrouter_api_key` are read when the variables are unset. |
+| `TYPESAFE_API_KEY`, `OPENROUTER_API_KEY` | API keys; the `pi` secret files are read when the variables are unset. |
 
-With an OpenRouter key the endpoint defaults to `https://openrouter.ai/api` and
-bare model names are rewritten to `~typesafe/<name>`; otherwise the request
-endpoint is `https://api.typesafe.ai/v1/systemone` with model `jev-latest`. An
-explicit `PI_JEV_BASE_URL` may be a root or a full `.../v1/systemone` endpoint;
-the SDK root is derived so the request path is never doubled. A custom loopback
-endpoint may run without a key. `cu_status` reports the resolved `endpoint` and
-key origin and never prints the key.
+## Architecture
 
-## The Wayland boundary (ADR-0002)
+- **Observation and execution** go through [`agent-desktop`](https://github.com/vercel-labs/agent-desktop)
+  as an async subprocess (never blocking the event loop), with a private state
+  root and full `AbortSignal` propagation.
+- **Decisions** are in-process via [`@typesafe-ai/sdk`](https://www.npmjs.com/package/@typesafe-ai/sdk),
+  with bounded retry on `429`/`503`/`529` (ADR-0001). Extensions cannot call
+  another extension's tool mid-execution, so the Jev client is embedded rather
+  than delegated.
+- **Policy is deterministic**: candidate filtering, Operation reconciliation,
+  Route Decisions, risk gating, text-queue and redaction rules, and the loop
+  budgets live in `src/policy/`, `src/decide/`, and `src/desktop/`.
+- **One test seam**: every tool is exercised through `execute(toolCallId, params,
+  signal, onUpdate, ctx)` with an injectable CLI runner and decision client; one
+  live test drives the real binary.
 
-On Hyprland Wayland, `agent-desktop`'s physical keyboard (`type`, `press`),
-pointer gestures, window management, screenshot, and `cmd+v` paste paths fail
-because they need XTEST or a GNOME Mutter session. `pi-omarchy-cu` therefore
-offers only verified AT-SPI semantic Operations plus `wl-clipboard`: `click`,
-`right-click`, `set-value`, `clear`, `select`, `toggle`, `check`, `uncheck`,
-`expand`, `collapse`, `scroll-to`. Text entry is reconciled strictly to
-`set-value`, and a target that does not advertise `SetValue` abstains with that
-explanation instead of falling back to keystrokes. Nothing here shells out to
-`wtype`, `hyprctl`, `grim`, or `xdotool`.
+See `docs/adr/`, `GLOSSARY.md`, and `skills/omarchy-cu/SKILL.md` for the design
+record, vocabulary, and the agent-facing usage guide.
 
 ## Development
 
 ```bash
 npm test          # node --test --import tsx test/*.test.ts
 npx tsc --noEmit  # typecheck
-npm run smoke     # load the extension in pi and list its tools
+npm run smoke     # load the extension in Pi and list its tools
 ```
 
-Tool-seam tests drive the real tool definitions with a fake `agent-desktop`
-runner and a fake System One client; `test/runner-live.test.ts` exercises the
-real binary when one is installed.
+## Credits
 
-See `docs/adr/` for the in-process Jev client (ADR-0001) and the strict AT-SPI
-execution boundary (ADR-0002), and `skills/omarchy-cu/SKILL.md` for the agent's
-usage guide.
+This package stands on several prior works:
+
+- **[agent-desktop](https://github.com/vercel-labs/agent-desktop)** by Vercel Labs
+  (Apache-2.0) — the AT-SPI observation and Ref-execution CLI that does the actual
+  desktop work. It ships as a dependency, and its Linux skill documents the
+  Chromium/Electron/Qt flags and the Electron bridge hazard reused here.
+- **[TypeSafe Jev System One](https://typesafe.ai)** and
+  **[`@typesafe-ai/sdk`](https://www.npmjs.com/package/@typesafe-ai/sdk)** (MIT) —
+  the calibrated choice/probability decisions behind `cu_act` and `cu_run`.
+- **[pi-jev](https://github.com/TheoOliveira/pi-jev)** by Theophilo Damiao (MIT) —
+  prior art for Jev credential/endpoint resolution, retry, and key-origin
+  reporting; `src/jev/` mirrors its resolution order deliberately.
+- **[Pi](https://github.com/earendil-works/pi)** by Earendil Works — the extension
+  runtime, tool API, and the `ctx.ui.confirm` interaction used for risky steps.
+- **[Omarchy](https://omarchy.org)** and **[Hyprland](https://hyprland.org)** —
+  the target desktop; ADR-0002 exists because of their Wayland constraints.
+- **AT-SPI / at-spi2-core** (GNOME) — the accessibility bus everything reads.
+- **wl-clipboard** — the Wayland clipboard backend behind `cu_ref` clipboard
+  commands.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
